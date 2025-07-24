@@ -1,7 +1,27 @@
-rem Build R library and version
-R --vanilla < run-roxygen.R
+@echo off
+rem =====================================
+rem Build and Check CAA R Package (Windows)
+rem =====================================
 
-rem Build library
-R CMD build --force gamInflu
-R CMD INSTALL --build gamInflu
-R CMD check gamInflu
+rem Check if R is in PATH
+where R >nul 2>nul
+if errorlevel 1 (
+  echo R is not in your PATH. Please install R and add it to your PATH.
+  exit /b 1
+)
+
+rem Generate documentation with roxygen2
+call R --vanilla < run-roxygen.R
+if errorlevel 1 exit /b 1
+
+rem Build the package
+call R CMD build --force CAA
+if errorlevel 1 exit /b 1
+
+rem Install the package
+call R CMD INSTALL --build CAA
+if errorlevel 1 exit /b 1
+
+rem Check the package
+call R CMD check CAA
+if errorlevel 1 exit /b 1

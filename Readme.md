@@ -1,6 +1,7 @@
-# Scaled Length Frequency Calculator
 
-A simplified R implementation for calculating scaled length frequencies from fisheries sampling data with bootstrap uncertainty estimation. Based on the catch-at-age package methodology but with streamlined data inputs and outputs.
+# Scaled Length Frequency Calculator (Sex-Based)
+
+An R implementation for calculating scaled length frequencies from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation. Based on the catch-at-age package methodology but with streamlined data inputs and outputs.
 
 ## Overview
 
@@ -29,6 +30,7 @@ The scaling happens in multiple stages:
 - R (version 3.5 or higher)
 - Base R packages only (no additional dependencies)
 
+
 ## Input Data Format
 
 ### Fish Data (`fish_data`)
@@ -37,7 +39,10 @@ A data frame with the following required columns:
 - **`stratum`** (character/factor): Sampling stratum identifier
 - **`sample_id`** (character/factor): Unique sample identifier  
 - **`length`** (numeric): Fish length in cm
-- **`count`** (numeric): Number of fish at this length in this sample
+- **`male`** (numeric): Number of male fish at this length in this sample
+- **`female`** (numeric): Number of female fish at this length in this sample
+- **`unsexed`** (numeric): Number of unsexed fish at this length in this sample
+- **`total`** (numeric, optional): Total fish at this length (auto-calculated if missing)
 - **`sample_weight_kg`** (numeric): Total weight of this sample in kg
 - **`total_catch_weight_kg`** (numeric): Total catch weight this sample represents in kg
 
@@ -53,7 +58,6 @@ A data frame with stratum-level information:
 # Load the functions (assuming saved in 'length_frequency_calculator.R')
 source('length_frequency_calculator.R')
 
-# Calculate scaled length frequencies
 results <- calculate_scaled_length_frequencies(
   fish_data = your_fish_data,
   strata_data = your_strata_data,
@@ -63,32 +67,33 @@ results <- calculate_scaled_length_frequencies(
   minus_group = FALSE
 )
 
-# View results
+# View results (sex-based)
 print(results)
 ```
 
 ## Function Parameters
 
-- **`fish_data`**: Data frame with fish sampling data (required)
+- **`fish_data`**: Data frame with fish sampling data (required, must include sex columns)
 - **`strata_data`**: Data frame with stratum totals (required)  
 - **`length_range`**: Vector of [min_length, max_length] to include (default: full range)
 - **`bootstraps`**: Number of bootstrap iterations (default: 300)
 - **`plus_group`**: Combine all lengths ≥ max_length (default: FALSE)
 - **`minus_group`**: Combine all lengths ≤ min_length (default: FALSE)
 
+
 ## Output Structure
 
-The function returns a `scaled_length_frequency` object containing:
+The function returns a `scaled_length_frequency` object containing sex-based arrays:
 
-- **`length_frequency`**: Matrix of scaled counts by length and stratum
-- **`proportions`**: Matrix of proportions by length and stratum
-- **`pooled_length_frequency`**: Vector of total scaled counts by length
-- **`pooled_proportions`**: Vector of total proportions by length
-- **`lf_cvs`**: Matrix of CVs for length frequencies by stratum
-- **`proportions_cvs`**: Matrix of CVs for proportions by stratum
-- **`pooled_lf_cv`**: Vector of CVs for pooled length frequencies
-- **`pooled_proportions_cv`**: Vector of CVs for pooled proportions
-- **`lf_bootstraps`**: Full bootstrap results (if requested)
+- **`length_frequency`**: 3D array (length x sex x stratum) of scaled counts
+- **`proportions`**: 3D array (length x sex x stratum) of proportions
+- **`pooled_length_frequency`**: matrix (length x sex) of total scaled counts
+- **`pooled_proportions`**: matrix (length x sex) of total proportions
+- **`lf_cvs`**: 3D array of CVs for length frequencies by stratum
+- **`proportions_cvs`**: 3D array of CVs for proportions by stratum
+- **`pooled_lf_cv`**: matrix of CVs for pooled length frequencies
+- **`pooled_proportions_cv`**: matrix of CVs for pooled proportions
+- **`lf_bootstraps`**: 4D array of full bootstrap results (if requested)
 
 ---
 
@@ -189,20 +194,26 @@ For example, if we had:
 ## Step 4: Extract Specific Results
 
 ```r
-# Get pooled length distribution
+
+# Get pooled length distribution (sex-based)
 pooled_results <- data.frame(
   Length = results$lengths,
-  Estimated_Count = round(results$pooled_length_frequency),
-  Proportion = round(results$pooled_proportions, 3),
-  CV_Percent = round(results$pooled_lf_cv * 100, 1)
+  Male = round(results$pooled_length_frequency[, "male"]),
+  Female = round(results$pooled_length_frequency[, "female"]),
+  Unsexed = round(results$pooled_length_frequency[, "unsexed"]),
+  Total = round(results$pooled_length_frequency[, "total"]),
+  CV_Male = round(results$pooled_lf_cv[, "male"] * 100, 1),
+  CV_Female = round(results$pooled_lf_cv[, "female"] * 100, 1),
+  CV_Unsexed = round(results$pooled_lf_cv[, "unsexed"] * 100, 1),
+  CV_Total = round(results$pooled_lf_cv[, "total"] * 100, 1)
 )
 
-print("Population length distribution:")
+print("Population length distribution (sex-based):")
 print(pooled_results)
 
-# Get results by stratum
-shallow_counts <- results$length_frequency[, "Shallow"]
-deep_counts <- results$length_frequency[, "Deep"]
+# Get results by stratum (sex-based)
+shallow_counts <- results$length_frequency[, "total", which(results$strata_names == "Shallow")]
+deep_counts <- results$length_frequency[, "total", which(results$strata_names == "Deep")]
 
 stratum_comparison <- data.frame(
   Length = results$lengths,
@@ -211,7 +222,7 @@ stratum_comparison <- data.frame(
   Total = round(shallow_counts + deep_counts)
 )
 
-print("\nLength distribution by stratum:")
+print("\nLength distribution by stratum (total across sexes):")
 print(stratum_comparison)
 ```
 

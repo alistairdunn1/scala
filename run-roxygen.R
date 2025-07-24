@@ -4,4 +4,4 @@ if (!is.element('roxygen2', installed.packages()[, 1])) {
 }
 
 require(roxygen2)
-roxygen2::roxygenize(paste0(getwd(), "/gamInflu"), clean = TRUE)
+roxygen2::roxygenize(paste0(getwd(), "/CAA"), clean = TRUE)
