@@ -1,4 +1,4 @@
-##' Resample Fish Data for Bootstrap (Sex-Aware)
+##' Resample Fish Data for Bootstrap (Sex-Aware, Composition)
 ##'
 ##' Resamples fish data for bootstrap analysis by resampling samples within each stratum and fish within each sample, with replacement. Sex columns are preserved.
 ##'

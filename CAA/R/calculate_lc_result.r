@@ -1,11 +1,11 @@
-##' Core Function to Calculate Length Frequency Result with Sex Categories
+##' Core Function to Calculate Length Composition Result with Sex Categories
 ##'
-##' Calculates length frequency results by sex and stratum, applying upweighting factors at both sample and stratum levels.
+##' Calculates length composition results by sex and stratum, applying upweighting factors at both sample and stratum levels.
 ##' Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 ##'
 ##' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, total, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, total, sample_area_km2, catch_density_kg_km2 (density-based)
 ##' @param strata_data Data frame with columns: stratum, stratum_total_catch_kg (weight-based) OR stratum, stratum_area_km2 (density-based)
-##' @param lengths Numeric vector of length bins to use for the frequency calculation
+##' @param lengths Numeric vector of length bins to use for the composition calculation
 ##' @param plus_group Logical, combine lengths >= max length into a plus group (default FALSE)
 ##' @param minus_group Logical, combine lengths <= min length into a minus group (default FALSE)
 ##' @param scaling_type Character, either "weight" for weight-based scaling or "density" for density-based scaling
@@ -14,7 +14,7 @@
 ##' @param lw_params_unsexed Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0)
 ##'
 ##' @importFrom stats aggregate
-##' @return 3D array: length x sex x stratum, with upweighted frequencies for each sex and stratum
+##' @return 3D array: length x sex x stratum, with upweighted compositions for each sex and stratum
 ##'
 ##' @details
 ##' The function applies a two-stage upweighting process:
@@ -53,11 +53,11 @@
 ##'   stratum_total_catch_kg = c(1000, 2000)
 ##' )
 ##' lengths <- 15:35
-##' result <- calculate_lf_result(fish_data, strata_data, lengths, FALSE, FALSE, "weight", lw_male, lw_female, lw_unsexed)
+##' result <- calculate_lc_result(fish_data, strata_data, lengths, FALSE, FALSE, "weight", lw_male, lw_female, lw_unsexed)
 ##' }
 ##'
 ##' @export
-calculate_lf_result <- function(fish_data, strata_data, lengths, plus_group, minus_group, scaling_type = "weight", lw_params_male, lw_params_female, lw_params_unsexed) {
+calculate_lc_result <- function(fish_data, strata_data, lengths, plus_group, minus_group, scaling_type = "weight", lw_params_male, lw_params_female, lw_params_unsexed) {
   # Helper function to calculate individual fish weight
   calculate_fish_weight <- function(length, sex, male_count, female_count, unsexed_count) {
     weight_male <- male_count * lw_params_male["a"] * (length^lw_params_male["b"]) / 1000 # Convert g to kg
@@ -71,11 +71,11 @@ calculate_lf_result <- function(fish_data, strata_data, lengths, plus_group, min
   n_lengths <- length(lengths)
 
   # Initialize result array: length x sex x stratum
-  lf_result <- array(0, dim = c(n_lengths, 5, n_strata))
-  dimnames(lf_result) <- list(lengths, c("length", "male", "female", "unsexed", "total"), strata_names)
+  lc_result <- array(0, dim = c(n_lengths, 5, n_strata))
+  dimnames(lc_result) <- list(lengths, c("composition", "male", "female", "unsexed", "total"), strata_names)
 
   # Set length values
-  lf_result[, "length", ] <- lengths
+  lc_result[, "composition", ] <- lengths
 
   # Process each stratum
   for (s in 1:n_strata) {
@@ -198,5 +198,5 @@ calculate_lf_result <- function(fish_data, strata_data, lengths, plus_group, min
     }
   }
 
-  return(lf_result)
+  return(lc_result)
 }

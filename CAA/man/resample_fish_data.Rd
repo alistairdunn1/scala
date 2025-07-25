@@ -2,7 +2,7 @@
 % Please edit documentation in R/resample_fish_data.r
 \name{resample_fish_data}
 \alias{resample_fish_data}
-\title{Resample Fish Data for Bootstrap (Sex-Aware)}
+\title{Resample Fish Data for Bootstrap (Sex-Aware, Composition)}
 \usage{
 resample_fish_data(fish_data)
 }

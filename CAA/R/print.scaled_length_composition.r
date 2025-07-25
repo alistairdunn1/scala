@@ -1,19 +1,26 @@
-##' Print Method for scaled_length_composition Objects with Sex Categories
+##' Print Scaled Length Composition Results (Sex-Based)
 ##'
 ##' Prints a summary of scaled length composition results by sex, including pooled and stratum-specific compositions, proportions, and uncertainty estimates (CVs) if available.
 ##'
-##' @param x An object of class \code{scaled_length_composition} as returned by \code{calculate_scaled_length_compositions}
-##' @param show_cvs Logical, whether to display coefficient of variation (CV) columns (default TRUE)
-##' @param show_sexes Logical, whether to display all sex categories (default TRUE)
-##' @param digits Integer, number of digits to round counts and proportions (default 2)
-##' @param ... Additional arguments (not used)
+##' @param x An object of class \code{scaled_length_composition} as returned by \code{calculate_scaled_length_compositions}.
+##' @param show_cvs Logical. Whether to display coefficient of variation (CV) columns. Default is TRUE.
+##' @param show_sexes Logical. Whether to display all sex categories. Default is TRUE.
+##' @param digits Integer. Number of digits to round counts and proportions. Default is 2.
+##' @param ... Additional arguments (not used).
 ##'
-##' @return Invisibly returns the printed data frames.
+##' @return Invisibly returns a list of printed data frames for pooled and stratum-specific results. Each data frame contains length composition counts by sex, and optionally CV columns if available.
+##'
+##' @details
+##' The function prints:
+##' - Pooled length composition results by sex (male, female, unsexed, total)
+##' - Stratum-specific length composition results if multiple strata are present
+##' - Summary statistics for total, male, female, and unsexed fish
+##' - CV columns if \code{show_cvs = TRUE} and uncertainty estimates are available
 ##'
 ##' @examples
 ##' \dontrun{
 ##' test_data <- generate_test_data()
-##' results <- calculate_scaled_length_frequencies(
+##' results <- calculate_scaled_length_compositions(
 ##'   fish_data = test_data$fish_data,
 ##'   strata_data = test_data$strata_data,
 ##'   length_range = c(15, 35),

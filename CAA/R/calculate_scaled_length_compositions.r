@@ -1,6 +1,6 @@
-##' Calculate Scaled Length Frequencies with Bootstrap Uncertainty (Sex-Based)
+##' Calculate Scaled Length Compositions with Bootstrap Uncertainty (Sex-Based)
 ##'
-##' Calculates scaled length frequencies for fish data by sex and stratum, applying upweighting and bootstrap resampling to estimate uncertainty.
+##' Calculates scaled length compositions for fish data by sex and stratum, applying upweighting and bootstrap resampling to estimate uncertainty.
 ##' Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 ##'
 ##' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, sample_area_km2, catch_density_kg_km2 (density-based)
@@ -16,15 +16,15 @@
 ##' @importFrom stats sd
 ##' @return List containing:
 ##'   \itemize{
-##'     \item length_frequency: 3D array (length x sex x stratum) of scaled length frequencies
+##'     \item length_composition: 3D array (length x sex x stratum) of scaled length compositions
 ##'     \item proportions: 3D array (length x sex x stratum) of proportions
-##'     \item pooled_length_frequency: matrix (length x sex) of pooled frequencies
+##'     \item pooled_length_composition: matrix (length x sex) of pooled compositions
 ##'     \item pooled_proportions: matrix (length x sex) of pooled proportions
-##'     \item lf_cvs: 3D array of CVs for length frequencies
+##'     \item lc_cvs: 3D array of CVs for length compositions
 ##'     \item proportions_cvs: 3D array of CVs for proportions
-##'     \item pooled_lf_cv: matrix of pooled CVs
+##'     \item pooled_lc_cv: matrix of pooled CVs
 ##'     \item pooled_proportions_cv: matrix of pooled proportion CVs
-##'     \item lf_bootstraps: 4D array of bootstrap results
+##'     \item lc_bootstraps: 4D array of bootstrap results
 ##'     \item lengths: vector of length bins
 ##'     \item strata_names: vector of stratum names
 ##'     \item n_bootstraps: number of bootstrap iterations
@@ -34,7 +34,7 @@
 ##'   }
 ##'
 ##' @details
-##' The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length frequency and proportion estimates.
+##' The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length composition and proportion estimates.
 ##'
 ##' **Weight-based scaling (commercial fisheries):**
 ##' - Sample scaling: total_catch_weight_kg / observed_sample_weight
@@ -73,7 +73,7 @@
 ##'   stratum_total_catch_kg = c(1000, 2000)
 ##' )
 ##'
-##' results <- calculate_scaled_length_frequencies(
+##' results <- calculate_scaled_length_compositions(
 ##'   fish_data = fish_data,
 ##'   strata_data = strata_data,
 ##'   length_range = c(15, 35),
@@ -86,15 +86,15 @@
 ##' }
 ##'
 ##' @export
-calculate_scaled_length_frequencies <- function(fish_data,
-                                                strata_data,
-                                                length_range = c(min(fish_data$length), max(fish_data$length)),
-                                                lw_params_male,
-                                                lw_params_female,
-                                                lw_params_unsexed,
-                                                bootstraps = 300,
-                                                plus_group = FALSE,
-                                                minus_group = FALSE) {
+calculate_scaled_length_compositions <- function(fish_data,
+                                                 strata_data,
+                                                 length_range = c(min(fish_data$length), max(fish_data$length)),
+                                                 lw_params_male,
+                                                 lw_params_female,
+                                                 lw_params_unsexed,
+                                                 bootstraps = 300,
+                                                 plus_group = FALSE,
+                                                 minus_group = FALSE) {
   # Validate length-weight parameters
   if (missing(lw_params_male) || missing(lw_params_female) || missing(lw_params_unsexed)) {
     stop("Length-weight parameters are required. Please provide lw_params_male, lw_params_female, and lw_params_unsexed.")
@@ -171,9 +171,9 @@ calculate_scaled_length_frequencies <- function(fish_data,
   strata_names <- unique(fish_data$stratum)
   n_strata <- length(strata_names)
 
-  # Calculate main length frequency
-  cat("Calculating scaled length frequencies by sex using", scaling_type, "approach...\n")
-  main_lf <- calculate_lf_result(fish_data, strata_data, lengths, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed)
+  # Calculate main length composition
+  cat("Calculating scaled length compositions by sex using", scaling_type, "approach...\n")
+  main_lf <- calculate_lc_result(fish_data, strata_data, lengths, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed)
 
   # Calculate pooled results across all strata
   pooled_lf <- apply(main_lf, c(1, 2), sum) # Sum across strata, keep sex dimension
@@ -211,7 +211,7 @@ calculate_scaled_length_frequencies <- function(fish_data,
 
       # Resample and calculate
       boot_data <- resample_fish_data(fish_data)
-      boot_lf <- calculate_lf_result(boot_data, strata_data, lengths, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed)
+      boot_lf <- calculate_lc_result(boot_data, strata_data, lengths, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed)
       lf_bootstraps[, , , b] <- boot_lf
     }
 
@@ -264,19 +264,19 @@ calculate_scaled_length_frequencies <- function(fish_data,
   # Format results
   results <- list(
     # Main results
-    length_frequency = main_lf,
+    length_composition = main_lf,
     proportions = proportions,
-    pooled_length_frequency = pooled_lf,
+    pooled_length_composition = pooled_lf,
     pooled_proportions = pooled_proportions,
 
     # Uncertainty estimates
-    lf_cvs = lf_cvs,
+    lc_cvs = lf_cvs,
     proportions_cvs = prop_cvs,
-    pooled_lf_cv = pooled_cv,
+    pooled_lc_cv = pooled_cv,
     pooled_proportions_cv = pooled_prop_cv,
 
     # Bootstrap results
-    lf_bootstraps = lf_bootstraps,
+    lc_bootstraps = lf_bootstraps,
 
     # Metadata
     lengths = lengths,
@@ -288,6 +288,6 @@ calculate_scaled_length_frequencies <- function(fish_data,
     scaling_type = scaling_type
   )
 
-  class(results) <- "scaled_length_frequency"
+  class(results) <- "scaled_length_composition"
   return(results)
 }

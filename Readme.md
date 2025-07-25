@@ -125,6 +125,45 @@ result <- calculate_scaled_length_frequencies(
 print(result)
 ```
 
+## Data Visualization
+
+The package includes a plotting function to visualize scaled length frequency results:
+
+### Basic Plotting
+
+```r
+# Install ggplot2 if not already installed
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  install.packages("ggplot2")
+}
+
+# Plot pooled results across all strata
+plot_length_frequency(result, plot_type = "pooled")
+
+# Plot results by stratum (faceted plot)
+plot_length_frequency(result, plot_type = "by_stratum")
+
+# Show proportions instead of absolute frequencies
+plot_length_frequency(result, plot_type = "pooled", y_axis = "proportion")
+
+# Customize plot appearance
+custom_colors <- c("male" = "#1f77b4", "female" = "#ff7f0e", 
+                   "unsexed" = "#2ca02c", "total" = "#d62728")
+plot_length_frequency(result, 
+                      plot_type = "pooled",
+                      sex_colors = custom_colors,
+                      title = "Length Distribution by Sex",
+                      show_uncertainty = TRUE)
+```
+
+### Plot Options
+
+- **`plot_type`**: "pooled" (combined across strata) or "by_stratum" (faceted by stratum)
+- **`y_axis`**: "frequency" (absolute counts) or "proportion" (relative proportions)
+- **`show_uncertainty`**: TRUE/FALSE to show error bars based on bootstrap CVs
+- **`sex_colors`**: Named vector to customize colors for each sex category
+- **`title`**: Custom plot title
+
 ### Research Survey Example (Density-based Scaling)
 
 ```r
