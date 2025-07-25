@@ -1,12 +1,126 @@
-# Scaled Length Frequency Calculator (Sex-Based)
+# scala: Scaled Catch at length and Age Compositions
 
-An R implementation for calculating scaled length frequencies from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation. Based on the catch-at-age package methodology but with streamlined data inputs and outputs.
+An R implementation for calculating scaled length compositions from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation. 
 
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
+[![R Package](https://img.shields.io/badge/R-package-blue.svg)](https://www.r-project.org/)
+[![Version](https://img.shields.io/badge/version-0.1-orange.svg)](https://github.com/alistairdunn1/scala)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Overview](#overview)
+- [Key Concepts](#key-concepts)
+- [Requirements](#requirements)
+- [Available Functions](#available-functions)
+- [Input Data Format](#input-data-format)
+- [Usage](#usage)
+- [Data Visualization](#data-visualization)
+- [Function Parameters](#function-parameters)
+- [Output Structure](#output-structure)
+- [Worked Example](#worked-example)
+- [Advanced Usage](#advanced-usage)
+- [Notes for Real Applications](#notes-for-real-applications)
+- [Package Information](#package-information)
+- [Citation](#citation)
+- [Contributing](#contributing)
+- [Troubleshooting](#troubleshooting)
+- [Next Steps](#next-steps)
+
+## Installation
+
+### Prerequisites
+
+- R (version 4.0 or higher)
+- Base R packages: `stats`
+
+### Installing the Package
+
+#### From Source (Local Development)
+
+1. Clone or download the repository
+2. In R, navigate to the package directory and install:
+
+```r
+# Install development dependencies (optional)
+install.packages(c("roxygen2", "devtools"))
+
+# Build and install the package
+devtools::install(".")
+
+# Or using R CMD (from command line)
+R CMD build scala
+R CMD INSTALL scala_0.1.tar.gz
+```
+
+#### Quick Build (Windows)
+
+For Windows users, use the provided build script:
+
+```batch
+build.bat
+```
+
+This script will:
+- Generate documentation using roxygen2
+- Build the package
+- Run R CMD check for validation
+- Install the package locally
+
+### Loading the Package
+
+```r
+library(scala)
+```
+
+### Optional Dependencies
+
+For enhanced plotting capabilities, install suggested packages:
+
+```r
+install.packages(c("ggplot2", "dplyr", "tidyr", "RColorBrewer", "viridis", "patchwork"))
+```
+
+## Quick Start
+
+Here's a minimal example to get you started:
+
+```r
+# Load the package
+library(scala)
+
+# Generate test data (commercial fisheries example)
+test_data <- generate_test_data(data_type = "commercial")
+
+# Get default length-weight parameters
+lw_params <- get_default_lw_params()
+
+# Calculate scaled length compositions
+results <- calculate_scaled_length_compositions(
+  fish_data = test_data$fish_data,
+  strata_data = test_data$strata_data,
+  length_range = c(20, 35),
+  lw_params_male = lw_params$male,
+  lw_params_female = lw_params$female,  
+  lw_params_unsexed = lw_params$unsexed,
+  bootstraps = 100
+)
+
+# View results
+print(results)
+
+# Plot results (requires ggplot2)
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  plot_length_composition(results, plot_type = "pooled")
+}
+```
+
 ## Overview
 
-This tool calculates scaled length frequencies from fish sampling data by:
+This tool calculates scaled length compositions from fish sampling data by:
 
 1. **Scaling within samples**: Upweighting sampled fish to represent the entire sample catch (weight-based) or area coverage (density-based)
 2. **Scaling within strata**: Upweighting samples to represent the entire stratum catch or area
@@ -35,13 +149,37 @@ The package supports two scaling approaches:
 
 - Resamples samples within each stratum (with replacement)
 - Resamples individual fish within each sample
-- Recalculates scaled length frequencies for each bootstrap iteration
+- Recalculates scaled length compositions for each bootstrap iteration
 - Calculates coefficient of variation (CV) from bootstrap distribution
 
 ## Requirements
 
-- R (version 3.5 or higher)
-- Base R packages only (no additional dependencies)
+- R (version 4.0 or higher)
+- **Required packages**: `stats` (included with base R)
+- **Suggested packages**: `ggplot2`, `dplyr`, `tidyr`, `RColorBrewer`, `viridis`, `patchwork`, `plotly`, `gridExtra`, `rmarkdown`, `testthat`
+- **Memory**: Sufficient RAM for bootstrap operations (depends on data size and bootstrap iterations)
+- **Storage**: Minimal disk space required (package size ~1MB)
+
+### Performance Considerations
+
+- **Bootstrap iterations**: More iterations provide better uncertainty estimates but increase computation time
+- **Data size**: Large datasets with many strata/samples will require more memory and processing time
+- **Recommended**: 300+ bootstrap iterations for final analyses, fewer (50-100) for exploratory work
+
+## Available Functions
+
+The package provides the following main functions:
+
+- **`calculate_scaled_length_compositions()`**: Main function for calculating scaled length compositions with bootstrap uncertainty
+- **`generate_test_data()`**: Generate sample datasets for testing and examples  
+- **`generate_commercial_test_data()`**: Generate commercial fisheries test data
+- **`generate_survey_test_data()`**: Generate research survey test data
+- **`get_default_lw_params()`**: Get default length-weight parameters for testing
+- **`plot_length_composition()`**: Create visualizations of length composition results (requires ggplot2)
+- **`resample_fish_data()`**: Internal function for bootstrap resampling
+- **`calculate_lc_result()`**: Internal calculation helper function
+
+For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_scaled_length_compositions`).
 
 ## Input Data Format
 
@@ -110,8 +248,8 @@ lw_male <- c(a = 0.0085, b = 3.10)      # Males
 lw_female <- c(a = 0.0092, b = 3.05)    # Females 
 lw_unsexed <- c(a = 0.0089, b = 3.08)   # Unsexed
 
-# Calculate scaled length frequencies
-result <- calculate_scaled_length_frequencies(
+# Calculate scaled length compositions
+result <- calculate_scaled_length_compositions(
   fish_data = test_data$fish_data,
   strata_data = test_data$strata_data,
   lw_params_male = lw_male,
@@ -127,7 +265,7 @@ print(result)
 
 ## Data Visualization
 
-The package includes a plotting function to visualize scaled length frequency results:
+The package includes a plotting function to visualize scaled length composition results:
 
 ### Basic Plotting
 
@@ -138,18 +276,18 @@ if (!requireNamespace("ggplot2", quietly = TRUE)) {
 }
 
 # Plot pooled results across all strata
-plot_length_frequency(result, plot_type = "pooled")
+plot_length_composition(result, plot_type = "pooled")
 
 # Plot results by stratum (faceted plot)
-plot_length_frequency(result, plot_type = "by_stratum")
+plot_length_composition(result, plot_type = "by_stratum")
 
-# Show proportions instead of absolute frequencies
-plot_length_frequency(result, plot_type = "pooled", y_axis = "proportion")
+# Show proportions instead of absolute compositions
+plot_length_composition(result, plot_type = "pooled", y_axis = "proportion")
 
 # Customize plot appearance
 custom_colors <- c("male" = "#1f77b4", "female" = "#ff7f0e", 
                    "unsexed" = "#2ca02c", "total" = "#d62728")
-plot_length_frequency(result, 
+plot_length_composition(result, 
                       plot_type = "pooled",
                       sex_colors = custom_colors,
                       title = "Length Distribution by Sex",
@@ -159,7 +297,7 @@ plot_length_frequency(result,
 ### Plot Options
 
 - **`plot_type`**: "pooled" (combined across strata) or "by_stratum" (faceted by stratum)
-- **`y_axis`**: "frequency" (absolute counts) or "proportion" (relative proportions)
+- **`y_axis`**: "composition" (absolute counts) or "proportion" (relative proportions)
 - **`show_uncertainty`**: TRUE/FALSE to show error bars based on bootstrap CVs
 - **`sex_colors`**: Named vector to customize colors for each sex category
 - **`title`**: Custom plot title
@@ -175,8 +313,8 @@ lw_male <- c(a = 0.0067, b = 3.15)      # Males
 lw_female <- c(a = 0.0071, b = 3.12)    # Females
 lw_unsexed <- c(a = 0.0069, b = 3.14)   # Unsexed
 
-# Calculate scaled length frequencies
-result <- calculate_scaled_length_frequencies(
+# Calculate scaled length compositions
+result <- calculate_scaled_length_compositions(
   fish_data = test_data$fish_data,
   strata_data = test_data$strata_data,
   lw_params_male = lw_male,
@@ -194,7 +332,7 @@ print(result)
 
 ```r
 # Load the functions
-source('length_frequency_calculator.R')
+source('length_composition_calculator.R')
 
 # Define length-weight parameters (same as above)
 lw_params_male <- c(a = 0.0085, b = 3.10)
@@ -202,7 +340,7 @@ lw_params_female <- c(a = 0.0092, b = 3.05)
 lw_params_unsexed <- c(a = 0.0088, b = 3.08)
 
 # Density-based data
-survey_results <- calculate_scaled_length_frequencies(
+survey_results <- calculate_scaled_length_compositions(
   fish_data = your_survey_fish_data,  # Contains sample_area_km2, catch_density_kg_km2
   strata_data = your_survey_strata_data,  # Contains stratum_area_km2
   length_range = c(min_length, max_length),
@@ -242,15 +380,15 @@ print(survey_results)
 
 ## Output Structure
 
-The function returns a `scaled_length_frequency` object containing sex-based arrays:
+The function returns a `scaled_length_composition` object containing sex-based arrays:
 
-- **`length_frequency`**: 3D array (length x sex x stratum) of scaled counts
+- **`length_composition`**: 3D array (length x sex x stratum) of scaled counts
 - **`proportions`**: 3D array (length x sex x stratum) of proportions
-- **`pooled_length_frequency`**: matrix (length x sex) of total scaled counts
+- **`pooled_length_composition`**: matrix (length x sex) of total scaled counts
 - **`pooled_proportions`**: matrix (length x sex) of total proportions
-- **`lf_cvs`**: 3D array of CVs for length frequencies by stratum
+- **`lf_cvs`**: 3D array of CVs for length compositions by stratum
 - **`proportions_cvs`**: 3D array of CVs for proportions by stratum
-- **`pooled_lf_cv`**: matrix of CVs for pooled length frequencies
+- **`pooled_lf_cv`**: matrix of CVs for pooled length compositions
 - **`pooled_proportions_cv`**: matrix of CVs for pooled proportions
 - **`lf_bootstraps`**: 4D array of full bootstrap results (if requested)
 
@@ -266,7 +404,7 @@ We have length sampling data from a trawl survey with two depth strata (Shallow 
 
 ```r
 # Load the functions
-source('length_frequency_calculator.R')
+source('length_composition_calculator.R')
 
 # Example fish sampling data
 fish_data <- data.frame(
@@ -300,7 +438,7 @@ print(strata_data)
 
 ```r
 # Calculate with bootstrap uncertainty
-results <- calculate_scaled_length_frequencies(
+results <- calculate_scaled_length_compositions(
   fish_data = fish_data,
   strata_data = strata_data,
   length_range = c(20, 32),
@@ -360,10 +498,10 @@ For example, if we had:
 # Get pooled length distribution (sex-based)
 pooled_results <- data.frame(
   Length = results$lengths,
-  Male = round(results$pooled_length_frequency[, "male"]),
-  Female = round(results$pooled_length_frequency[, "female"]),
-  Unsexed = round(results$pooled_length_frequency[, "unsexed"]),
-  Total = round(results$pooled_length_frequency[, "total"]),
+  Male = round(results$pooled_length_composition[, "male"]),
+  Female = round(results$pooled_length_composition[, "female"]),
+  Unsexed = round(results$pooled_length_composition[, "unsexed"]),
+  Total = round(results$pooled_length_composition[, "total"]),
   CV_Male = round(results$pooled_lf_cv[, "male"] * 100, 1),
   CV_Female = round(results$pooled_lf_cv[, "female"] * 100, 1),
   CV_Unsexed = round(results$pooled_lf_cv[, "unsexed"] * 100, 1),
@@ -374,8 +512,8 @@ print("Population length distribution (sex-based):")
 print(pooled_results)
 
 # Get results by stratum (sex-based)
-shallow_counts <- results$length_frequency[, "total", which(results$strata_names == "Shallow")]
-deep_counts <- results$length_frequency[, "total", which(results$strata_names == "Deep")]
+shallow_counts <- results$length_composition[, "total", which(results$strata_names == "Shallow")]
+deep_counts <- results$length_composition[, "total", which(results$strata_names == "Deep")]
 
 stratum_comparison <- data.frame(
   Length = results$lengths,
@@ -403,7 +541,7 @@ if (length(high_cv_lengths) > 0) {
 
 # Summary statistics
 cat("\nSampling summary:\n")
-cat("Total estimated fish:", round(sum(results$pooled_length_frequency)), "\n")
+cat("Total estimated fish:", round(sum(results$pooled_length_composition)), "\n")
 cat("Mean CV across lengths:", round(mean(results$pooled_lf_cv) * 100, 1), "%\n")
 cat("Length classes with CV > 20%:", sum(results$pooled_lf_cv > 0.2), "of", length(results$lengths), "\n")
 ```
@@ -423,7 +561,7 @@ if (!is.na(results$lf_bootstraps[1])) {
   
   ci_results <- data.frame(
     Length = results$lengths,
-    Estimate = round(results$pooled_length_frequency),
+    Estimate = round(results$pooled_length_composition),
     Lower_95 = round(apply(pooled_bootstraps, 1, quantile, 0.025)),
     Upper_95 = round(apply(pooled_bootstraps, 1, quantile, 0.975))
   )
@@ -441,7 +579,7 @@ bootstrap_counts <- c(50, 100, 200, 300)
 cv_stability <- data.frame()
 
 for (n_boot in bootstrap_counts) {
-  temp_results <- calculate_scaled_length_frequencies(
+  temp_results <- calculate_scaled_length_compositions(
     fish_data = fish_data,
     strata_data = strata_data,
     bootstraps = n_boot
@@ -484,11 +622,104 @@ print(cv_stability)
 5. **Data Quality**: Validate input data for consistency in units, completeness, and biological plausibility.
 6. **Survey Design**: For density-based scaling, ensure that sampling areas are representative of the strata and that density estimates are reliable.
 
+## Package Information
+
+**Version**: 0.1  
+**Author**: Alistair Dunn  
+**Maintainer**: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>  
+**License**: GPL (>= 3)  
+**Encoding**: UTF-8
+
+## Citation
+
+To cite the `scala` package in publications, please use:
+
+```r
+# Get citation information
+citation("scala")
+```
+
+**Suggested citation:**
+
+Dunn, A. (2025). scala: Calculate scaled catch and length and age compositions. R package version 0.1. https://github.com/alistairdunn1/scala
+
+## Contributing
+
+This package is under active development. For bug reports, feature requests, or contributions:
+
+1. Check existing issues on the GitHub repository
+2. Submit bug reports with reproducible examples
+3. Suggest improvements or new features
+4. Submit pull requests with proposed changes
+
+## Package Development
+
+### Building from Source
+
+The package includes development tools for maintainers:
+
+```r
+# Generate documentation
+roxygen2::roxygenise()
+
+# Run tests
+devtools::test()
+
+# Check package
+devtools::check()
+
+# Build package
+devtools::build()
+```
+
+### Windows Build Script
+
+Use `build.bat` for automated building on Windows systems:
+
+```batch
+build.bat
+```
+
+This script handles documentation generation, building, checking, and installation.
+
+## Troubleshooting
+
+### Common Issues
+
+**Error: "Package not found"**
+- Ensure you have built and installed the package correctly
+- Try `devtools::install(".")` from the package directory
+
+**Error: "Length-weight parameters missing"**
+- All three sex-specific length-weight parameters are required
+- Use `get_default_lw_params()` for testing purposes
+
+**Error: "Column not found in data"**
+- Check that your data has the required column names
+- For weight-based: `sample_weight_kg`, `total_catch_weight_kg`, `stratum_total_catch_kg`
+- For density-based: `sample_area_km2`, `catch_density_kg_km2`, `stratum_area_km2`
+
+**High CVs (> 30%)**
+- Increase sample sizes within strata
+- Consider increasing bootstrap iterations (300+ recommended)
+- Review stratification scheme
+
+**Plotting errors**
+- Install ggplot2: `install.packages("ggplot2")`
+- Check that results object is valid
+
+### Getting Help
+
+- Use `?function_name` for function documentation
+- Check function examples with `example(function_name)`
+- Review the worked examples in this README
+- Submit issues on the GitHub repository for bugs or questions
+
 ## Next Steps
 
 This framework can be extended to:
 
-- Apply age-length keys to convert length frequencies to age frequencies
+- Apply age-length keys to convert length compositions to age compositions
 - Include multiple species or sex-specific analyses
 - Incorporate more sophisticated variance estimation methods
 - Add visualization functions for results presentation

@@ -1,6 +1,6 @@
 @echo off
 rem =====================================
-rem Build and Check CAA R Package (Windows)
+rem Build and Check scala R Package (Windows)
 rem =====================================
 
 rem Check if R is in PATH
@@ -15,13 +15,13 @@ call R --vanilla < run-roxygen.R
 if errorlevel 1 exit /b 1
 
 rem Build the package
-call R CMD build --force CAA
+call R CMD build --force scala
 if errorlevel 1 exit /b 1
 
 rem Install the package
-call R CMD INSTALL --build CAA
+call R CMD INSTALL --build scala
 if errorlevel 1 exit /b 1
 
 rem Check the package
-call R CMD check CAA
+call R CMD check scala
 if errorlevel 1 exit /b 1
