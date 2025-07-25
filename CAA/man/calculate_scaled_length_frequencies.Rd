@@ -8,17 +8,26 @@ calculate_scaled_length_frequencies(
   fish_data,
   strata_data,
   length_range = c(min(fish_data$length), max(fish_data$length)),
+  lw_params_male,
+  lw_params_female,
+  lw_params_unsexed,
   bootstraps = 300,
   plus_group = FALSE,
   minus_group = FALSE
 )
 }
 \arguments{
-\item{fish_data}{Data frame with columns: stratum, sample_id, length, male, female, unsexed, sample_weight_kg, total_catch_weight_kg}
+\item{fish_data}{Data frame with columns: stratum, sample_id, length, male, female, unsexed, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, sample_area_km2, catch_density_kg_km2 (density-based)}
 
-\item{strata_data}{Data frame with columns: stratum, stratum_total_catch_kg}
+\item{strata_data}{Data frame with columns: stratum, stratum_total_catch_kg (weight-based) OR stratum, stratum_area_km2 (density-based)}
 
 \item{length_range}{Numeric vector of min and max lengths to include (e.g., c(15, 35))}
+
+\item{lw_params_male}{Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0)}
+
+\item{lw_params_female}{Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0)}
+
+\item{lw_params_unsexed}{Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0)}
 
 \item{bootstraps}{Integer, number of bootstrap iterations (default 300)}
 
@@ -48,12 +57,33 @@ List containing:
 }
 \description{
 Calculates scaled length frequencies for fish data by sex and stratum, applying upweighting and bootstrap resampling to estimate uncertainty.
+Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 }
 \details{
-The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length frequency and proportion estimates. Sex categories are: male, female, unsexed, and total. Plus and minus group functionality is available for aggregating extreme length bins.
+The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length frequency and proportion estimates.
+
+**Weight-based scaling (commercial fisheries):**
+- Sample scaling: total_catch_weight_kg / observed_sample_weight
+- Stratum scaling: stratum_total_catch_kg / sum_of_sample_catches_in_stratum
+
+**Density-based scaling (surveys):**
+- Sample scaling: catch_density_kg_km2 * sample_area_km2 / observed_sample_weight
+- Stratum scaling: stratum_area_km2 / sum_of_sample_areas_in_stratum
+
+**Length-weight relationships:**
+Uses the allometric relationship: Weight = a * Length^b
+where a and b are species and sex-specific parameters.
+
+Sex categories are: male, female, unsexed, and total. Plus and minus group functionality is available for aggregating extreme length bins.
 }
 \examples{
 \dontrun{
+# Length-weight parameters (example for snapper)
+lw_male <- c(a = 0.0085, b = 3.1)
+lw_female <- c(a = 0.0092, b = 3.05)
+lw_unsexed <- c(a = 0.0088, b = 3.08)
+
+# Weight-based example (commercial fisheries)
 fish_data <- data.frame(
   stratum = c("A", "A", "B", "B"),
   sample_id = c(1, 1, 2, 2),
@@ -68,10 +98,14 @@ strata_data <- data.frame(
   stratum = c("A", "B"),
   stratum_total_catch_kg = c(1000, 2000)
 )
+
 results <- calculate_scaled_length_frequencies(
   fish_data = fish_data,
   strata_data = strata_data,
   length_range = c(15, 35),
+  lw_params_male = lw_male,
+  lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed,
   bootstraps = 100
 )
 print(results)

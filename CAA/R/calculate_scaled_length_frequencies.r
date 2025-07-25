@@ -1,14 +1,19 @@
 ##' Calculate Scaled Length Frequencies with Bootstrap Uncertainty (Sex-Based)
 ##'
 ##' Calculates scaled length frequencies for fish data by sex and stratum, applying upweighting and bootstrap resampling to estimate uncertainty.
+##' Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 ##'
-##' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, sample_weight_kg, total_catch_weight_kg
-##' @param strata_data Data frame with columns: stratum, stratum_total_catch_kg
+##' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, sample_area_km2, catch_density_kg_km2 (density-based)
+##' @param strata_data Data frame with columns: stratum, stratum_total_catch_kg (weight-based) OR stratum, stratum_area_km2 (density-based)
 ##' @param length_range Numeric vector of min and max lengths to include (e.g., c(15, 35))
+##' @param lw_params_male Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0)
+##' @param lw_params_female Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0)
+##' @param lw_params_unsexed Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0)
 ##' @param bootstraps Integer, number of bootstrap iterations (default 300)
 ##' @param plus_group Logical, combine lengths >= max length into a plus group (default FALSE)
 ##' @param minus_group Logical, combine lengths <= min length into a minus group (default FALSE)
 ##'
+##' @importFrom stats sd
 ##' @return List containing:
 ##'   \itemize{
 ##'     \item length_frequency: 3D array (length x sex x stratum) of scaled length frequencies
@@ -29,10 +34,30 @@
 ##'   }
 ##'
 ##' @details
-##' The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length frequency and proportion estimates. Sex categories are: male, female, unsexed, and total. Plus and minus group functionality is available for aggregating extreme length bins.
+##' The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length frequency and proportion estimates.
+##'
+##' **Weight-based scaling (commercial fisheries):**
+##' - Sample scaling: total_catch_weight_kg / observed_sample_weight
+##' - Stratum scaling: stratum_total_catch_kg / sum_of_sample_catches_in_stratum
+##'
+##' **Density-based scaling (surveys):**
+##' - Sample scaling: catch_density_kg_km2 * sample_area_km2 / observed_sample_weight
+##' - Stratum scaling: stratum_area_km2 / sum_of_sample_areas_in_stratum
+##'
+##' **Length-weight relationships:**
+##' Uses the allometric relationship: Weight = a * Length^b
+##' where a and b are species and sex-specific parameters.
+##'
+##' Sex categories are: male, female, unsexed, and total. Plus and minus group functionality is available for aggregating extreme length bins.
 ##'
 ##' @examples
 ##' \dontrun{
+##' # Length-weight parameters (example for snapper)
+##' lw_male <- c(a = 0.0085, b = 3.1)
+##' lw_female <- c(a = 0.0092, b = 3.05)
+##' lw_unsexed <- c(a = 0.0088, b = 3.08)
+##'
+##' # Weight-based example (commercial fisheries)
 ##' fish_data <- data.frame(
 ##'   stratum = c("A", "A", "B", "B"),
 ##'   sample_id = c(1, 1, 2, 2),
@@ -47,10 +72,14 @@
 ##'   stratum = c("A", "B"),
 ##'   stratum_total_catch_kg = c(1000, 2000)
 ##' )
+##'
 ##' results <- calculate_scaled_length_frequencies(
 ##'   fish_data = fish_data,
 ##'   strata_data = strata_data,
 ##'   length_range = c(15, 35),
+##'   lw_params_male = lw_male,
+##'   lw_params_female = lw_female,
+##'   lw_params_unsexed = lw_unsexed,
 ##'   bootstraps = 100
 ##' )
 ##' print(results)
@@ -60,27 +89,74 @@
 calculate_scaled_length_frequencies <- function(fish_data,
                                                 strata_data,
                                                 length_range = c(min(fish_data$length), max(fish_data$length)),
+                                                lw_params_male,
+                                                lw_params_female,
+                                                lw_params_unsexed,
                                                 bootstraps = 300,
                                                 plus_group = FALSE,
                                                 minus_group = FALSE) {
-  # Validate inputs
-  required_fish_cols <- c(
-    "stratum", "sample_id", "length", "male", "female", "unsexed",
-    "sample_weight_kg", "total_catch_weight_kg"
-  )
-  required_strata_cols <- c("stratum", "stratum_total_catch_kg")
+  # Validate length-weight parameters
+  if (missing(lw_params_male) || missing(lw_params_female) || missing(lw_params_unsexed)) {
+    stop("Length-weight parameters are required. Please provide lw_params_male, lw_params_female, and lw_params_unsexed.")
+  }
 
-  if (!all(required_fish_cols %in% names(fish_data))) {
+  # Validate length-weight parameter structure
+  validate_lw_params <- function(params, name) {
+    if (!is.numeric(params) || length(params) != 2 || is.null(names(params)) ||
+      !all(c("a", "b") %in% names(params))) {
+      stop(paste0(name, " must be a named numeric vector with elements 'a' and 'b'. Example: c(a = 0.01, b = 3.0)"))
+    }
+    if (params["a"] <= 0 || params["b"] <= 0) {
+      stop(paste0(name, " parameters 'a' and 'b' must be positive values."))
+    }
+  }
+
+  validate_lw_params(lw_params_male, "lw_params_male")
+  validate_lw_params(lw_params_female, "lw_params_female")
+  validate_lw_params(lw_params_unsexed, "lw_params_unsexed")
+  # Detect data type (weight-based vs density-based)
+  weight_based_fish_cols <- c("sample_weight_kg", "total_catch_weight_kg")
+  density_based_fish_cols <- c("sample_area_km2", "catch_density_kg_km2")
+  weight_based_strata_cols <- c("stratum_total_catch_kg")
+  density_based_strata_cols <- c("stratum_area_km2")
+
+  has_weight_data <- all(weight_based_fish_cols %in% names(fish_data)) &&
+    all(weight_based_strata_cols %in% names(strata_data))
+  has_density_data <- all(density_based_fish_cols %in% names(fish_data)) &&
+    all(density_based_strata_cols %in% names(strata_data))
+
+  if (!has_weight_data && !has_density_data) {
     stop(
-      "fish_data missing required columns: ",
-      paste(setdiff(required_fish_cols, names(fish_data)), collapse = ", ")
+      "Data must contain either:\n",
+      "1. Weight-based columns: fish_data (", paste(weight_based_fish_cols, collapse = ", "),
+      ") and strata_data (", paste(weight_based_strata_cols, collapse = ", "), ")\n",
+      "2. Density-based columns: fish_data (", paste(density_based_fish_cols, collapse = ", "),
+      ") and strata_data (", paste(density_based_strata_cols, collapse = ", "), ")"
     )
   }
 
-  if (!all(required_strata_cols %in% names(strata_data))) {
+  if (has_weight_data && has_density_data) {
+    stop("Data contains both weight-based and density-based columns. Please use only one approach.")
+  }
+
+  # Determine scaling type
+  scaling_type <- if (has_weight_data) "weight" else "density"
+
+  # Validate common required columns
+  required_common_fish_cols <- c("stratum", "sample_id", "length", "male", "female", "unsexed")
+  required_common_strata_cols <- c("stratum")
+
+  if (!all(required_common_fish_cols %in% names(fish_data))) {
+    stop(
+      "fish_data missing required columns: ",
+      paste(setdiff(required_common_fish_cols, names(fish_data)), collapse = ", ")
+    )
+  }
+
+  if (!all(required_common_strata_cols %in% names(strata_data))) {
     stop(
       "strata_data missing required columns: ",
-      paste(setdiff(required_strata_cols, names(strata_data)), collapse = ", ")
+      paste(setdiff(required_common_strata_cols, names(strata_data)), collapse = ", ")
     )
   }
 
@@ -96,8 +172,8 @@ calculate_scaled_length_frequencies <- function(fish_data,
   n_strata <- length(strata_names)
 
   # Calculate main length frequency
-  cat("Calculating scaled length frequencies by sex...\n")
-  main_lf <- calculate_lf_result(fish_data, strata_data, lengths, plus_group, minus_group)
+  cat("Calculating scaled length frequencies by sex using", scaling_type, "approach...\n")
+  main_lf <- calculate_lf_result(fish_data, strata_data, lengths, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed)
 
   # Calculate pooled results across all strata
   pooled_lf <- apply(main_lf, c(1, 2), sum) # Sum across strata, keep sex dimension
@@ -135,7 +211,7 @@ calculate_scaled_length_frequencies <- function(fish_data,
 
       # Resample and calculate
       boot_data <- resample_fish_data(fish_data)
-      boot_lf <- calculate_lf_result(boot_data, strata_data, lengths, plus_group, minus_group)
+      boot_lf <- calculate_lf_result(boot_data, strata_data, lengths, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed)
       lf_bootstraps[, , , b] <- boot_lf
     }
 
@@ -208,7 +284,8 @@ calculate_scaled_length_frequencies <- function(fish_data,
     n_bootstraps = bootstraps,
     plus_group = plus_group,
     minus_group = minus_group,
-    has_sex_data = TRUE
+    has_sex_data = TRUE,
+    scaling_type = scaling_type
   )
 
   class(results) <- "scaled_length_frequency"

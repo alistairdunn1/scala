@@ -4,35 +4,65 @@
 \alias{calculate_lf_result}
 \title{Core Function to Calculate Length Frequency Result with Sex Categories}
 \usage{
-calculate_lf_result(fish_data, strata_data, lengths, plus_group, minus_group)
+calculate_lf_result(
+  fish_data,
+  strata_data,
+  lengths,
+  plus_group,
+  minus_group,
+  scaling_type = "weight",
+  lw_params_male,
+  lw_params_female,
+  lw_params_unsexed
+)
 }
 \arguments{
-\item{fish_data}{Data frame with columns: stratum, sample_id, length, male, female, unsexed, total, sample_weight_kg, total_catch_weight_kg}
+\item{fish_data}{Data frame with columns: stratum, sample_id, length, male, female, unsexed, total, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, total, sample_area_km2, catch_density_kg_km2 (density-based)}
 
-\item{strata_data}{Data frame with columns: stratum, stratum_total_catch_kg}
+\item{strata_data}{Data frame with columns: stratum, stratum_total_catch_kg (weight-based) OR stratum, stratum_area_km2 (density-based)}
 
 \item{lengths}{Numeric vector of length bins to use for the frequency calculation}
 
 \item{plus_group}{Logical, combine lengths >= max length into a plus group (default FALSE)}
 
 \item{minus_group}{Logical, combine lengths <= min length into a minus group (default FALSE)}
+
+\item{scaling_type}{Character, either "weight" for weight-based scaling or "density" for density-based scaling}
+
+\item{lw_params_male}{Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0)}
+
+\item{lw_params_female}{Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0)}
+
+\item{lw_params_unsexed}{Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0)}
 }
 \value{
 3D array: length x sex x stratum, with upweighted frequencies for each sex and stratum
 }
 \description{
 Calculates length frequency results by sex and stratum, applying upweighting factors at both sample and stratum levels.
+Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 }
 \details{
 The function applies a two-stage upweighting process:
   \enumerate{
-    \item Sample-level upweighting based on total catch weight vs observed weight
-    \item Stratum-level upweighting based on stratum totals vs sample totals
+    \item **Weight-based scaling**: Sample-level upweighting based on total catch weight vs observed weight, then stratum-level upweighting based on stratum totals vs sample totals
+    \item **Density-based scaling**: Sample-level upweighting based on catch density and sample area vs observed weight, then stratum-level upweighting based on stratum area vs sample areas
   }
+
+**Length-weight calculations:**
+Uses the allometric relationship: Weight = a * Length^b where a and b are sex-specific parameters.
+Individual fish weights are calculated and summed to get total observed sample weight.
+
 Sex categories are: male, female, unsexed, and total. Plus and minus group functionality is available for aggregating extreme length bins.
 }
 \examples{
 \dontrun{
+# Length-weight parameters
+lw_male <- c(a = 0.0085, b = 3.1)
+lw_female <- c(a = 0.0092, b = 3.05)
+lw_unsexed <- c(a = 0.0088, b = 3.08)
+
+# Weight-based example
 fish_data <- data.frame(
   stratum = c("A", "A", "B", "B"),
   sample_id = c(1, 1, 2, 2),
@@ -49,7 +79,7 @@ strata_data <- data.frame(
   stratum_total_catch_kg = c(1000, 2000)
 )
 lengths <- 15:35
-result <- calculate_lf_result(fish_data, strata_data, lengths, FALSE, FALSE)
+result <- calculate_lf_result(fish_data, strata_data, lengths, FALSE, FALSE, "weight", lw_male, lw_female, lw_unsexed)
 }
 
 }

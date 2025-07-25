@@ -1,25 +1,38 @@
-
 # Scaled Length Frequency Calculator (Sex-Based)
 
 An R implementation for calculating scaled length frequencies from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation. Based on the catch-at-age package methodology but with streamlined data inputs and outputs.
 
+Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
+
 ## Overview
 
 This tool calculates scaled length frequencies from fish sampling data by:
-1. **Scaling within samples**: Upweighting sampled fish to represent the entire sample catch
-2. **Scaling within strata**: Upweighting samples to represent the entire stratum catch  
+
+1. **Scaling within samples**: Upweighting sampled fish to represent the entire sample catch (weight-based) or area coverage (density-based)
+2. **Scaling within strata**: Upweighting samples to represent the entire stratum catch or area
 3. **Scaling across strata**: Combining strata to get total population estimates
 4. **Bootstrap resampling**: Providing uncertainty estimates through resampling procedures
 
 ## Key Concepts
 
 ### Scaling Process
-The scaling happens in multiple stages:
+
+The package supports two scaling approaches:
+
+#### Weight-Based Scaling (Commercial Fisheries)
+
 - **Sample scaling**: `total_catch_weight / observed_sample_weight`
 - **Stratum scaling**: `stratum_total_catch / sum_of_sample_catches_in_stratum`
 - **Final scaling**: Combined effect scales individual fish counts to population estimates
 
+#### Density-Based Scaling (Research Surveys)
+
+- **Sample scaling**: `(catch_density * sample_area) / observed_sample_weight`
+- **Stratum scaling**: `stratum_area / sum_of_sample_areas_in_stratum`
+- **Final scaling**: Combined effect scales individual fish counts to population estimates based on area coverage
+
 ### Bootstrap Uncertainty
+
 - Resamples samples within each stratum (with replacement)
 - Resamples individual fish within each sample
 - Recalculates scaled length frequencies for each bootstrap iteration
@@ -30,14 +43,18 @@ The scaling happens in multiple stages:
 - R (version 3.5 or higher)
 - Base R packages only (no additional dependencies)
 
-
 ## Input Data Format
 
-### Fish Data (`fish_data`)
+The package supports two types of scaling approaches:
+
+### Weight-Based Scaling (Commercial Fisheries)
+
+#### Fish Data (`fish_data`)
+
 A data frame with the following required columns:
 
 - **`stratum`** (character/factor): Sampling stratum identifier
-- **`sample_id`** (character/factor): Unique sample identifier  
+- **`sample_id`** (character/factor): Unique sample identifier
 - **`length`** (numeric): Fish length in cm
 - **`male`** (numeric): Number of male fish at this length in this sample
 - **`female`** (numeric): Number of female fish at this length in this sample
@@ -46,40 +63,143 @@ A data frame with the following required columns:
 - **`sample_weight_kg`** (numeric): Total weight of this sample in kg
 - **`total_catch_weight_kg`** (numeric): Total catch weight this sample represents in kg
 
-### Strata Data (`strata_data`)
+#### Strata Data (`strata_data`)
+
 A data frame with stratum-level information:
 
 - **`stratum`** (character/factor): Stratum identifier that matches fish_data
 - **`stratum_total_catch_kg`** (numeric): Total catch weight for entire stratum in kg
 
+### Density-Based Scaling (Research Surveys)
+
+#### Fish Data (`fish_data`)
+
+A data frame with the following required columns:
+
+- **`stratum`** (character/factor): Sampling stratum identifier
+- **`sample_id`** (character/factor): Unique sample identifier
+- **`length`** (numeric): Fish length in cm
+- **`male`** (numeric): Number of male fish at this length in this sample
+- **`female`** (numeric): Number of female fish at this length in this sample
+- **`unsexed`** (numeric): Number of unsexed fish at this length in this sample
+- **`total`** (numeric, optional): Total fish at this length (auto-calculated if missing)
+- **`sample_area_km2`** (numeric): Area sampled in this sample in km²
+- **`catch_density_kg_km2`** (numeric): Catch density observed in this sample in kg/km²
+
+#### Strata Data (`strata_data`)
+
+A data frame with stratum-level information:
+
+- **`stratum`** (character/factor): Stratum identifier that matches fish_data
+- **`stratum_area_km2`** (numeric): Total area of the stratum in km²
+
 ## Usage
 
+The function automatically detects whether you're using weight-based or density-based data based on the column names provided.
+
+**Length-Weight Parameters Required:** All analyses require species and sex-specific length-weight parameters using the allometric relationship: Weight (g) = a × Length(cm)^b
+
+### Commercial Fisheries Example (Weight-based Scaling)
+
 ```r
-# Load the functions (assuming saved in 'length_frequency_calculator.R')
+# Load test data for commercial fisheries
+test_data <- generate_test_data(data_type = "commercial")
+
+# Example length-weight parameters
+lw_male <- c(a = 0.0085, b = 3.10)      # Males
+lw_female <- c(a = 0.0092, b = 3.05)    # Females 
+lw_unsexed <- c(a = 0.0089, b = 3.08)   # Unsexed
+
+# Calculate scaled length frequencies
+result <- calculate_scaled_length_frequencies(
+  fish_data = test_data$fish_data,
+  strata_data = test_data$strata_data,
+  lw_params_male = lw_male,
+  lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  length_range = c(20, 80),
+  bootstraps = 300
+)
+
+# View results
+print(result)
+```
+
+### Research Survey Example (Density-based Scaling)
+
+```r
+# Load test data for research surveys
+test_data <- generate_test_data(data_type = "survey")
+
+# Example length-weight parameters for different species/populations
+lw_male <- c(a = 0.0067, b = 3.15)      # Males
+lw_female <- c(a = 0.0071, b = 3.12)    # Females
+lw_unsexed <- c(a = 0.0069, b = 3.14)   # Unsexed
+
+# Calculate scaled length frequencies
+result <- calculate_scaled_length_frequencies(
+  fish_data = test_data$fish_data,
+  strata_data = test_data$strata_data,
+  lw_params_male = lw_male,
+  lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  length_range = c(25, 85),
+  bootstraps = 300
+)
+
+# View results
+print(result)
+```
+
+### Density-Based Example (Research Surveys)
+
+```r
+# Load the functions
 source('length_frequency_calculator.R')
 
-results <- calculate_scaled_length_frequencies(
-  fish_data = your_fish_data,
-  strata_data = your_strata_data,
+# Define length-weight parameters (same as above)
+lw_params_male <- c(a = 0.0085, b = 3.10)
+lw_params_female <- c(a = 0.0092, b = 3.05)
+lw_params_unsexed <- c(a = 0.0088, b = 3.08)
+
+# Density-based data
+survey_results <- calculate_scaled_length_frequencies(
+  fish_data = your_survey_fish_data,  # Contains sample_area_km2, catch_density_kg_km2
+  strata_data = your_survey_strata_data,  # Contains stratum_area_km2
   length_range = c(min_length, max_length),
+  lw_params_male = lw_params_male,
+  lw_params_female = lw_params_female,
+  lw_params_unsexed = lw_params_unsexed,
   bootstraps = 300,
   plus_group = FALSE,
   minus_group = FALSE
 )
 
-# View results (sex-based)
-print(results)
+# View results
+print(survey_results)
 ```
 
 ## Function Parameters
 
 - **`fish_data`**: Data frame with fish sampling data (required, must include sex columns)
-- **`strata_data`**: Data frame with stratum totals (required)  
+- **`strata_data`**: Data frame with stratum totals (required)
 - **`length_range`**: Vector of [min_length, max_length] to include (default: full range)
+- **`lw_params_male`**: Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0) (required)
+- **`lw_params_female`**: Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0) (required)
+- **`lw_params_unsexed`**: Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0) (required)
 - **`bootstraps`**: Number of bootstrap iterations (default: 300)
 - **`plus_group`**: Combine all lengths ≥ max_length (default: FALSE)
 - **`minus_group`**: Combine all lengths ≤ min_length (default: FALSE)
 
+### Length-Weight Parameter Notes
+
+- Parameters follow the allometric relationship: **Weight (g) = a × Length(cm)^b**
+- Both `a` and `b` must be positive values
+- Parameters must be provided as named vectors with elements 'a' and 'b'
+- Different parameters for each sex category allow for sexual dimorphism in growth
+- Example parameters for common species:
+  - **Snapper**: Male c(a = 0.0085, b = 3.10), Female c(a = 0.0092, b = 3.05)
+  - **Haddock**: Male c(a = 0.0067, b = 3.15), Female c(a = 0.0071, b = 3.12)
 
 ## Output Structure
 
@@ -100,6 +220,7 @@ The function returns a `scaled_length_frequency` object containing sex-based arr
 # Worked Example
 
 ## Scenario
+
 We have length sampling data from a trawl survey with two depth strata (Shallow and Deep). We want to estimate the length distribution of the entire fish population.
 
 ## Step 1: Prepare Your Data
@@ -154,6 +275,7 @@ print(results)
 ```
 
 Expected output:
+
 ```
 Scaled Length Frequency Results
 ===============================
@@ -177,6 +299,7 @@ Pooled Length Frequency:
 ### Understanding the Scaling
 
 For example, if we had:
+
 - Sample T001 in Shallow stratum: 15 fish at 22cm
 - Sample weight: 8.5 kg, represents 85 kg total catch
 - Sample scaling factor: 85/8.5 = 10
@@ -187,7 +310,7 @@ For example, if we had:
 ### Uncertainty Interpretation
 
 - **CV < 10%**: High precision, reliable estimates
-- **CV 10-20%**: Moderate precision, adequate for most purposes  
+- **CV 10-20%**: Moderate precision, adequate for most purposes
 - **CV 20-30%**: Lower precision, interpret with caution
 - **CV > 30%**: Low precision, may need more sampling
 
@@ -297,20 +420,38 @@ print(cv_stability)
 
 ## Notes for Real Applications
 
+### When to Use Each Approach
+
+**Weight-based scaling** is appropriate when:
+
+- Working with commercial fisheries data
+- You have total catch weights at sample and stratum levels
+- Scaling from samples to represent total commercial catch
+- Working with observer data or port sampling
+
+**Density-based scaling** is appropriate when:
+
+- Working with research survey data
+- You have swept area or sampling area information
+- You know catch density (biomass per unit area)
+- You want to estimate population abundance over specific areas
+
+### Implementation Notes
+
 1. **Length-Weight Relationships**: The current implementation uses placeholder weight calculations. In practice, incorporate species-specific length-weight relationships.
-
 2. **Sample Size Considerations**: Ensure adequate sample sizes within each stratum. Small samples can lead to unstable bootstrap estimates.
-
 3. **Stratification**: Choose strata that minimize within-stratum variability while maintaining adequate sample sizes.
-
-4. **Bootstrap Iterations**: Use 300+ iterations for final analyses. The example uses 100 for speed.
-
+4. **Bootstrap Iterations**: Use 300+ iterations for final analyses. The examples use fewer for speed.
 5. **Data Quality**: Validate input data for consistency in units, completeness, and biological plausibility.
+6. **Survey Design**: For density-based scaling, ensure that sampling areas are representative of the strata and that density estimates are reliable.
 
 ## Next Steps
 
 This framework can be extended to:
+
 - Apply age-length keys to convert length frequencies to age frequencies
-- Include multiple species or sex-specific analyses  
+- Include multiple species or sex-specific analyses
 - Incorporate more sophisticated variance estimation methods
 - Add visualization functions for results presentation
+- Include swept area calculations for trawl surveys
+- Add support for different survey gear types

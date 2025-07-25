@@ -1,25 +1,42 @@
 ##' Core Function to Calculate Length Frequency Result with Sex Categories
 ##'
 ##' Calculates length frequency results by sex and stratum, applying upweighting factors at both sample and stratum levels.
+##' Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 ##'
-##' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, total, sample_weight_kg, total_catch_weight_kg
-##' @param strata_data Data frame with columns: stratum, stratum_total_catch_kg
+##' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, total, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, total, sample_area_km2, catch_density_kg_km2 (density-based)
+##' @param strata_data Data frame with columns: stratum, stratum_total_catch_kg (weight-based) OR stratum, stratum_area_km2 (density-based)
 ##' @param lengths Numeric vector of length bins to use for the frequency calculation
 ##' @param plus_group Logical, combine lengths >= max length into a plus group (default FALSE)
 ##' @param minus_group Logical, combine lengths <= min length into a minus group (default FALSE)
+##' @param scaling_type Character, either "weight" for weight-based scaling or "density" for density-based scaling
+##' @param lw_params_male Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0)
+##' @param lw_params_female Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0)
+##' @param lw_params_unsexed Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0)
 ##'
+##' @importFrom stats aggregate
 ##' @return 3D array: length x sex x stratum, with upweighted frequencies for each sex and stratum
 ##'
 ##' @details
 ##' The function applies a two-stage upweighting process:
 ##'   \enumerate{
-##'     \item Sample-level upweighting based on total catch weight vs observed weight
-##'     \item Stratum-level upweighting based on stratum totals vs sample totals
+##'     \item **Weight-based scaling**: Sample-level upweighting based on total catch weight vs observed weight, then stratum-level upweighting based on stratum totals vs sample totals
+##'     \item **Density-based scaling**: Sample-level upweighting based on catch density and sample area vs observed weight, then stratum-level upweighting based on stratum area vs sample areas
 ##'   }
+##'
+##' **Length-weight calculations:**
+##' Uses the allometric relationship: Weight = a * Length^b where a and b are sex-specific parameters.
+##' Individual fish weights are calculated and summed to get total observed sample weight.
+##'
 ##' Sex categories are: male, female, unsexed, and total. Plus and minus group functionality is available for aggregating extreme length bins.
 ##'
 ##' @examples
 ##' \dontrun{
+##' # Length-weight parameters
+##' lw_male <- c(a = 0.0085, b = 3.1)
+##' lw_female <- c(a = 0.0092, b = 3.05)
+##' lw_unsexed <- c(a = 0.0088, b = 3.08)
+##'
+##' # Weight-based example
 ##' fish_data <- data.frame(
 ##'   stratum = c("A", "A", "B", "B"),
 ##'   sample_id = c(1, 1, 2, 2),
@@ -36,11 +53,19 @@
 ##'   stratum_total_catch_kg = c(1000, 2000)
 ##' )
 ##' lengths <- 15:35
-##' result <- calculate_lf_result(fish_data, strata_data, lengths, FALSE, FALSE)
+##' result <- calculate_lf_result(fish_data, strata_data, lengths, FALSE, FALSE, "weight", lw_male, lw_female, lw_unsexed)
 ##' }
 ##'
 ##' @export
-calculate_lf_result <- function(fish_data, strata_data, lengths, plus_group, minus_group) {
+calculate_lf_result <- function(fish_data, strata_data, lengths, plus_group, minus_group, scaling_type = "weight", lw_params_male, lw_params_female, lw_params_unsexed) {
+  # Helper function to calculate individual fish weight
+  calculate_fish_weight <- function(length, sex, male_count, female_count, unsexed_count) {
+    weight_male <- male_count * lw_params_male["a"] * (length^lw_params_male["b"]) / 1000 # Convert g to kg
+    weight_female <- female_count * lw_params_female["a"] * (length^lw_params_female["b"]) / 1000
+    weight_unsexed <- unsexed_count * lw_params_unsexed["a"] * (length^lw_params_unsexed["b"]) / 1000
+    return(weight_male + weight_female + weight_unsexed)
+  }
+
   strata_names <- unique(fish_data$stratum)
   n_strata <- length(strata_names)
   n_lengths <- length(lengths)
@@ -59,23 +84,80 @@ calculate_lf_result <- function(fish_data, strata_data, lengths, plus_group, min
 
     if (nrow(stratum_data) == 0) next
 
-    # Calculate sample-level summaries
-    sample_summary <- aggregate(
-      cbind(male, female, unsexed, total) ~
-        sample_id + sample_weight_kg + total_catch_weight_kg,
-      data = stratum_data, sum
-    )
+    if (scaling_type == "weight") {
+      # Weight-based scaling approach
 
-    # Calculate observed weight for each sample (placeholder - use length-weight in practice)
-    sample_summary$observed_weight_kg <- sample_summary$total * 0.1 # placeholder
+      # Calculate sample-level summaries
+      sample_summary <- aggregate(
+        cbind(male, female, unsexed, total) ~
+          sample_id + sample_weight_kg + total_catch_weight_kg,
+        data = stratum_data, sum
+      )
 
-    # Calculate upweighting factor
-    sample_summary$upweight_factor <- sample_summary$total_catch_weight_kg / sample_summary$observed_weight_kg
+      # Calculate observed weight for each sample using length-weight relationships
+      sample_summary$observed_weight_kg <- 0
+      for (i in seq_len(nrow(sample_summary))) {
+        sample_id <- sample_summary$sample_id[i]
+        sample_fish <- stratum_data[stratum_data$sample_id == sample_id, ]
 
-    # Get stratum total catch
-    stratum_total <- strata_data$stratum_total_catch_kg[strata_data$stratum == stratum][1]
-    stratum_sample_total <- sum(sample_summary$total_catch_weight_kg)
-    stratum_upweight <- stratum_total / stratum_sample_total
+        total_weight <- 0
+        for (j in seq_len(nrow(sample_fish))) {
+          fish_weight <- calculate_fish_weight(
+            sample_fish$length[j], "all",
+            sample_fish$male[j], sample_fish$female[j], sample_fish$unsexed[j]
+          )
+          total_weight <- total_weight + fish_weight
+        }
+        sample_summary$observed_weight_kg[i] <- total_weight
+      }
+
+      # Calculate upweighting factor
+      sample_summary$upweight_factor <- sample_summary$total_catch_weight_kg / sample_summary$observed_weight_kg
+
+      # Get stratum total catch
+      stratum_total <- strata_data$stratum_total_catch_kg[strata_data$stratum == stratum][1]
+      stratum_sample_total <- sum(sample_summary$total_catch_weight_kg)
+      stratum_upweight <- stratum_total / stratum_sample_total
+    } else if (scaling_type == "density") {
+      # Density-based scaling approach
+
+      # Calculate sample-level summaries
+      sample_summary <- aggregate(
+        cbind(male, female, unsexed, total) ~
+          sample_id + sample_area_km2 + catch_density_kg_km2,
+        data = stratum_data, sum
+      )
+
+      # Calculate observed weight for each sample using length-weight relationships
+      sample_summary$observed_weight_kg <- 0
+      for (i in seq_len(nrow(sample_summary))) {
+        sample_id <- sample_summary$sample_id[i]
+        sample_fish <- stratum_data[stratum_data$sample_id == sample_id, ]
+
+        total_weight <- 0
+        for (j in seq_len(nrow(sample_fish))) {
+          fish_weight <- calculate_fish_weight(
+            sample_fish$length[j], "all",
+            sample_fish$male[j], sample_fish$female[j], sample_fish$unsexed[j]
+          )
+          total_weight <- total_weight + fish_weight
+        }
+        sample_summary$observed_weight_kg[i] <- total_weight
+      }
+
+      # Calculate expected weight based on density and area
+      sample_summary$expected_weight_kg <- sample_summary$catch_density_kg_km2 * sample_summary$sample_area_km2
+
+      # Calculate upweighting factor
+      sample_summary$upweight_factor <- sample_summary$expected_weight_kg / sample_summary$observed_weight_kg
+
+      # Get stratum total area and calculate stratum upweight
+      stratum_area <- strata_data$stratum_area_km2[strata_data$stratum == stratum][1]
+      stratum_sample_area <- sum(sample_summary$sample_area_km2)
+      stratum_upweight <- stratum_area / stratum_sample_area
+    } else {
+      stop("scaling_type must be either 'weight' or 'density'")
+    }
 
     # Apply upweighting to length frequencies
     for (i in seq_len(nrow(sample_summary))) {

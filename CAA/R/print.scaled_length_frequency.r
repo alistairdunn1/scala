@@ -30,6 +30,10 @@ print.scaled_length_frequency <- function(x, show_cvs = TRUE, show_sexes = TRUE,
   cat("Length range:", min(x$lengths), "to", max(x$lengths), "\n")
   cat("Number of strata:", length(x$strata_names), "\n")
   cat("Bootstrap iterations:", x$n_bootstraps, "\n")
+  if (!is.null(x$scaling_type)) {
+    scaling_desc <- ifelse(x$scaling_type == "weight", "Weight-based (commercial)", "Density-based (survey)")
+    cat("Scaling approach:", scaling_desc, "\n")
+  }
   cat("Sex categories: Male, Female, Unsexed, Total\n\n")
 
   # Show pooled results
