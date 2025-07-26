@@ -99,7 +99,7 @@ test_data <- generate_test_data(data_type = "commercial")
 lw_params <- get_default_lw_params()
 
 # Calculate scaled length compositions
-results <- calculate_scaled_length_compositions(
+results <- calculate_length_compositions(
   fish_data = test_data$fish_data,
   strata_data = test_data$strata_data,
   length_range = c(20, 35),
@@ -112,9 +112,13 @@ results <- calculate_scaled_length_compositions(
 # View results
 print(results)
 
-# Plot results (requires ggplot2)
+# Create publication-quality plots with lines and uncertainty ribbons
 if (requireNamespace("ggplot2", quietly = TRUE)) {
-  plot_length_composition(results, plot_type = "pooled")
+  # Pooled plot with uncertainty ribbons
+  plot(results, plot_type = "pooled", show_uncertainty = TRUE)
+  
+  # Faceted plot: rows=strata, columns=sex categories
+  plot(results, plot_type = "by_stratum", show_uncertainty = TRUE)
 }
 ```
 
@@ -126,6 +130,27 @@ This tool calculates scaled length compositions from fish sampling data by:
 2. **Scaling within strata**: Upweighting samples to represent the entire stratum catch or area
 3. **Scaling across strata**: Combining strata to get total population estimates
 4. **Bootstrap resampling**: Providing uncertainty estimates through resampling procedures
+
+## Recent Enhancements
+
+### Version 0.1 - Performance & Visualization Improvements
+
+**🚀 Optimized Performance**
+- **Vectorized calculations**: Replaced nested loops with advanced dplyr operations for significantly faster execution
+- **Bootstrap optimization**: Streamlined resampling procedures for improved computational efficiency
+- **Memory efficiency**: Reduced memory usage through optimized data structures
+
+**📊 Enhanced Visualization**
+- **Modern line plots**: Replaced traditional bar charts with clean line visualizations
+- **Uncertainty ribbons**: Bootstrap confidence regions displayed as intuitive shaded areas
+- **Faceted layouts**: Professional multi-panel displays with rows for strata and columns for sex categories
+- **Publication-ready**: Customizable themes and colors for scientific publications
+
+**📈 Key Benefits**
+- Faster analysis workflows with optimized calculations
+- Cleaner, more interpretable visualizations
+- Better uncertainty communication through ribbon displays
+- Professional multi-panel layouts for comprehensive data exploration
 
 ## Key Concepts
 
@@ -170,16 +195,23 @@ The package supports two scaling approaches:
 
 The package provides the following main functions:
 
-- **`calculate_scaled_length_compositions()`**: Main function for calculating scaled length compositions with bootstrap uncertainty
+- **`calculate_length_compositions()`**: Main function for calculating length compositions with optional bootstrap uncertainty estimation
 - **`generate_test_data()`**: Generate sample datasets for testing and examples  
 - **`generate_commercial_test_data()`**: Generate commercial fisheries test data
 - **`generate_survey_test_data()`**: Generate research survey test data
 - **`get_default_lw_params()`**: Get default length-weight parameters for testing
-- **`plot_length_composition()`**: Create visualizations of length composition results (requires ggplot2)
+- **`plot.length_composition()`**: Create professional visualizations with lines and uncertainty ribbons (requires ggplot2)
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
-- **`calculate_lc_result()`**: Internal calculation helper function
 
-For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_scaled_length_compositions`).
+### Enhanced Plotting Features
+
+The plotting system now includes:
+- **Line plots** with uncertainty ribbons instead of traditional bar charts
+- **Faceted layouts** for multi-stratum, multi-sex visualization
+- **Bootstrap uncertainty** visualization as shaded confidence regions
+- **Customizable themes** and color schemes for publication-quality figures
+
+For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_length_compositions`).
 
 ## Input Data Format
 
@@ -249,7 +281,7 @@ lw_female <- c(a = 0.0092, b = 3.05)    # Females
 lw_unsexed <- c(a = 0.0089, b = 3.08)   # Unsexed
 
 # Calculate scaled length compositions
-result <- calculate_scaled_length_compositions(
+result <- calculate_length_compositions(
   fish_data = test_data$fish_data,
   strata_data = test_data$strata_data,
   lw_params_male = lw_male,
@@ -265,7 +297,14 @@ print(result)
 
 ## Data Visualization
 
-The package includes a plotting function to visualize scaled length composition results:
+The package includes professional plotting capabilities to visualize scaled length composition results using **lines with uncertainty ribbons**:
+
+### Enhanced Plotting Features
+
+- **Line plots** with uncertainty ribbons (replacing traditional bar charts)
+- **Faceted layouts** for by-stratum visualization (rows = strata, columns = sex categories)
+- **Bootstrap uncertainty** displayed as shaded ribbons (±1 standard error)
+- **Customizable appearance** with color themes and plot options
 
 ### Basic Plotting
 
@@ -275,34 +314,65 @@ if (!requireNamespace("ggplot2", quietly = TRUE)) {
   install.packages("ggplot2")
 }
 
-# Plot pooled results across all strata
-plot_length_composition(result, plot_type = "pooled")
+# Plot pooled results across all strata (lines with uncertainty ribbons)
+plot(result, plot_type = "pooled", show_uncertainty = TRUE)
 
-# Plot results by stratum (faceted plot)
-plot_length_composition(result, plot_type = "by_stratum")
+# Plot results by stratum (faceted layout: rows=strata, columns=sex categories)
+plot(result, plot_type = "by_stratum", show_uncertainty = TRUE)
 
 # Show proportions instead of absolute compositions
-plot_length_composition(result, plot_type = "pooled", y_axis = "proportion")
+plot(result, plot_type = "pooled", y_axis = "proportion")
 
-# Customize plot appearance
-custom_colors <- c("male" = "#1f77b4", "female" = "#ff7f0e", 
-                   "unsexed" = "#2ca02c", "total" = "#d62728")
-plot_length_composition(result, 
-                      plot_type = "pooled",
-                      sex_colors = custom_colors,
-                      title = "Length Distribution by Sex",
-                      show_uncertainty = TRUE)
+# Customize plot appearance with ocean theme
+ocean_colors <- c("male" = "#004466", "female" = "#006699", 
+                  "unsexed" = "#0099CC", "pooled" = "#FF6600")
+plot(result, 
+     plot_type = "pooled",
+     sex_colors = ocean_colors,
+     title = "Length Distribution by Sex",
+     show_uncertainty = TRUE)
+```
+
+### Advanced Visualization Options
+
+```r
+# By-stratum faceted plot with custom layout
+# Rows represent different strata (e.g., "Coastal", "Offshore")  
+# Columns represent sex categories (Male, Female, Unsexed, Pooled)
+plot(result, 
+     plot_type = "by_stratum",
+     show_uncertainty = TRUE,
+     title = "Length Composition by Sex and Stratum")
+
+# Proportional view for comparing distribution shapes
+plot(result, 
+     plot_type = "by_stratum", 
+     y_axis = "proportion",
+     title = "Relative Length Composition Patterns")
 ```
 
 ### Plot Options
 
-- **`plot_type`**: "pooled" (combined across strata) or "by_stratum" (faceted by stratum)
-- **`y_axis`**: "composition" (absolute counts) or "proportion" (relative proportions)
-- **`show_uncertainty`**: TRUE/FALSE to show error bars based on bootstrap CVs
-- **`sex_colors`**: Named vector to customize colors for each sex category
+- **`plot_type`**: 
+  - `"pooled"` - Combined across strata with separate lines for each sex
+  - `"by_stratum"` - Faceted layout (rows = strata, columns = sex categories)
+- **`y_axis`**: 
+  - `"composition"` - Absolute scaled compositions (number of fish)
+  - `"proportion"` - Relative proportions (0-1 scale)
+- **`show_uncertainty`**: 
+  - `TRUE` - Show uncertainty ribbons based on bootstrap CV estimates
+  - `FALSE` - Show only the mean length composition lines
+- **`sex_colors`**: Named vector to customize colors for sex categories (`"male"`, `"female"`, `"unsexed"`, `"pooled"`)
 - **`title`**: Custom plot title
 
-### Research Survey Example (Density-based Scaling)
+### Visualization Features
+
+- **Lines**: Clean representation of length composition trends
+- **Uncertainty ribbons**: Shaded areas showing ±1 standard error from bootstrap estimates
+- **Faceted layout**: Professional multi-panel display for comparing strata and sex categories
+- **Color customization**: Flexible theming options for publication-quality figures
+
+### Complete Visualization Example
 
 ```r
 # Load test data for research surveys
@@ -313,8 +383,8 @@ lw_male <- c(a = 0.0067, b = 3.15)      # Males
 lw_female <- c(a = 0.0071, b = 3.12)    # Females
 lw_unsexed <- c(a = 0.0069, b = 3.14)   # Unsexed
 
-# Calculate scaled length compositions
-result <- calculate_scaled_length_compositions(
+# Calculate scaled length compositions with bootstrap uncertainty
+result <- calculate_length_compositions(
   fish_data = test_data$fish_data,
   strata_data = test_data$strata_data,
   lw_params_male = lw_male,
@@ -324,8 +394,31 @@ result <- calculate_scaled_length_compositions(
   bootstraps = 300
 )
 
-# View results
-print(result)
+# Create comprehensive visualizations
+library(ggplot2)
+
+# 1. Pooled results with uncertainty ribbons
+pooled_plot <- plot(result, 
+                    plot_type = "pooled", 
+                    show_uncertainty = TRUE,
+                    title = "Length Composition by Sex (All Strata Combined)")
+
+# 2. Faceted by-stratum plot showing all sex×stratum combinations
+faceted_plot <- plot(result, 
+                     plot_type = "by_stratum", 
+                     show_uncertainty = TRUE,
+                     title = "Length Composition by Sex and Stratum")
+
+# 3. Proportional comparison for pattern analysis
+proportion_plot <- plot(result, 
+                        plot_type = "by_stratum", 
+                        y_axis = "proportion",
+                        title = "Relative Length Distribution Patterns")
+
+# Display plots
+print(pooled_plot)
+print(faceted_plot) 
+print(proportion_plot)
 ```
 
 ### Density-Based Example (Research Surveys)
@@ -340,7 +433,7 @@ lw_params_female <- c(a = 0.0092, b = 3.05)
 lw_params_unsexed <- c(a = 0.0088, b = 3.08)
 
 # Density-based data
-survey_results <- calculate_scaled_length_compositions(
+survey_results <- calculate_length_compositions(
   fish_data = your_survey_fish_data,  # Contains sample_area_km2, catch_density_kg_km2
   strata_data = your_survey_strata_data,  # Contains stratum_area_km2
   length_range = c(min_length, max_length),
@@ -438,7 +531,7 @@ print(strata_data)
 
 ```r
 # Calculate with bootstrap uncertainty
-results <- calculate_scaled_length_compositions(
+results <- calculate_length_compositions(
   fish_data = fish_data,
   strata_data = strata_data,
   length_range = c(20, 32),
@@ -579,7 +672,7 @@ bootstrap_counts <- c(50, 100, 200, 300)
 cv_stability <- data.frame()
 
 for (n_boot in bootstrap_counts) {
-  temp_results <- calculate_scaled_length_compositions(
+  temp_results <- calculate_length_compositions(
     fish_data = fish_data,
     strata_data = strata_data,
     bootstraps = n_boot

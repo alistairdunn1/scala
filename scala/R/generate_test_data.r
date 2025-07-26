@@ -1,25 +1,33 @@
-# Example usage and test data generation for length compositions
-
-##' Get default length-weight parameters for testing
-##'
-##' @return List of length-weight parameters for males, females, and unsexed fish
-##' @keywords internal
-get_default_lw_params <- function() {
-  # Default parameters based on typical marine fish (e.g., snapper)
-  # Weight (g) = a * Length(cm)^b
-  list(
-    male = c(a = 0.0085, b = 3.10),
-    female = c(a = 0.0092, b = 3.05),
-    unsexed = c(a = 0.0088, b = 3.08)
-  )
-}
-
-##' Generate test data for CAA package examples
-##'
-##' @param data_type Character, either "commercial" for weight-based data or "survey" for density-based data
-##' @return List containing fish_data and strata_data for testing
-##' @importFrom stats rpois runif
-##' @keywords internal
+#' Generate test data for length composition analysis
+#'
+#' Creates synthetic fish data for testing and demonstrating length composition functions.
+#' Supports both commercial fisheries (weight-based) and survey (density-based) data types.
+#'
+#' @param data_type Character, either "commercial" for weight-based data or "survey" for density-based data
+#' @return List containing fish_data and strata_data for testing
+#'
+#' @details
+#' The function generates realistic test datasets with:
+#' \itemize{
+#'   \item Multiple strata (North/South)
+#'   \item Sample-based hierarchical structure
+#'   \item Sex-specific length distributions
+#'   \item Appropriate scaling information (weights or densities)
+#' }
+#'
+#' @seealso
+#' \code{\link{calculate_length_compositions}} for analyzing the generated data,
+#' \code{\link{generate_commercial_test_data}} and \code{\link{generate_survey_test_data}} for specific data types
+#'
+#' @examples
+#' # Generate commercial data
+#' commercial_data <- generate_test_data("commercial")
+#'
+#' # Generate survey data
+#' survey_data <- generate_test_data("survey")
+#'
+#' @importFrom stats rpois runif
+#' @export
 generate_test_data <- function(data_type = "commercial") {
   if (data_type == "commercial") {
     # Generate commercial fisheries data (weight-based scaling)
@@ -32,9 +40,9 @@ generate_test_data <- function(data_type = "commercial") {
   }
 }
 
-##' Generate commercial fisheries test data
-##' @importFrom stats rpois runif
-##' @keywords internal
+#' Generate commercial fisheries test data
+#' @importFrom stats rpois runif
+#' @export
 generate_commercial_test_data <- function() {
   set.seed(123)
 
@@ -76,9 +84,9 @@ generate_commercial_test_data <- function() {
   return(list(fish_data = fish_data, strata_data = strata_data))
 }
 
-##' Generate survey test data
-##' @importFrom stats rpois runif
-##' @keywords internal
+#' Generate survey test data
+#' @importFrom stats rpois runif
+#' @export
 generate_survey_test_data <- function() {
   set.seed(456)
 

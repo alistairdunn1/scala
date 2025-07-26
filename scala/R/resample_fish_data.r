@@ -1,63 +1,67 @@
-##' Resample Fish Data for Bootstrap (Sex-Aware, Composition)
-##'
-##' Resamples fish data for bootstrap analysis by resampling samples within each stratum and fish within each sample, with replacement. Sex columns are preserved.
-##'
-##' @param fish_data A data frame containing fish measurement data with columns such as stratum, sample_id, length, male, female, unsexed, total, sample_weight_kg, total_catch_weight_kg
-##'
-##' @return A data frame of resampled fish data with new sample IDs for each bootstrap replicate.
-##'
-##' @details
-##' The function performs two-stage resampling:
-##'   \enumerate{
-##'     \item Samples are resampled with replacement within each stratum.
-##'     \item Fish within each sample are resampled with replacement if more than one fish is present.
-##'   }
-##' New sample IDs are assigned in the format "stratum_boot_i" for each bootstrap replicate. Sex columns are retained.
-##'
-##' @examples
-##' \dontrun{
-##' fish_data <- data.frame(
-##'   stratum = c("A", "A", "B", "B"),
-##'   sample_id = c(1, 1, 2, 2),
-##'   length = c(20, 25, 22, 28),
-##'   male = c(2, 1, 3, 2),
-##'   female = c(2, 1, 2, 1),
-##'   unsexed = c(1, 1, 2, 1),
-##'   total = c(5, 3, 7, 4)
-##' )
-##' resampled <- resample_fish_data(fish_data)
-##' }
-##'
-##' @export
+#' Resample Fish Data for Bootstrap Analysis
+#'
+#' Resamples fish data for bootstrap uncertainty estimation by resampling samples within each stratum.
+#'
+#' @param fish_data Data frame with fish observation data including columns: stratum, sample_id, length, male, female, unsexed, total
+#'
+#' @return Resampled fish data frame with the same structure as input
+#'
+#' @details
+#' The function performs bootstrap resampling by:
+#' 1. Identifying unique samples within each stratum
+#' 2. Resampling samples with replacement within each stratum
+#' 3. Returning the resampled data while preserving the original data structure
+#'
+#' This resampling approach maintains the hierarchical structure of the data (strata > samples > fish observations)
+#' which is important for proper uncertainty estimation in the length composition calculations.
+#'
+#' @seealso \code{\link{calculate_length_compositions}} for the main analysis function that uses this resampling,
+#'   \code{\link{generate_test_data}} for creating test data to resample
+#' @export
 resample_fish_data <- function(fish_data) {
-  # Resample samples within each stratum
+  # Optimized resampling using base R functions
   strata <- unique(fish_data$stratum)
-  resampled_data <- data.frame()
 
-  for (stratum in strata) {
+  # Process each stratum
+  resampled_list <- lapply(strata, function(stratum) {
     stratum_data <- fish_data[fish_data$stratum == stratum, ]
-    samples <- unique(stratum_data$sample_id)
 
-    # Resample samples with replacement
-    resampled_samples <- sample(samples, length(samples), replace = TRUE)
+    if (nrow(stratum_data) == 0) {
+      return(data.frame())
+    } # Handle empty strata
 
-    stratum_resampled <- data.frame()
-    for (i in seq_along(resampled_samples)) {
-      sample_data <- stratum_data[stratum_data$sample_id == resampled_samples[i], ]
+    unique_samples <- unique(stratum_data$sample_id)
+    n_samples <- length(unique_samples)
 
-      # Resample fish within sample
-      if (nrow(sample_data) > 1) {
-        resampled_indices <- sample(seq_len(nrow(sample_data)), nrow(sample_data), replace = TRUE)
-        sample_data <- sample_data[resampled_indices, ]
-      }
+    # Sample with replacement
+    resampled_sample_ids <- sample(unique_samples, n_samples, replace = TRUE)
 
-      # Assign new sample ID
-      sample_data$sample_id <- paste0(stratum, "_boot_", i)
-      stratum_resampled <- rbind(stratum_resampled, sample_data)
+    # Create resampled data for this stratum
+    stratum_resampled_list <- lapply(seq_along(resampled_sample_ids), function(i) {
+      sample_data <- stratum_data[stratum_data$sample_id == resampled_sample_ids[i], ]
+
+      if (nrow(sample_data) == 0) {
+        return(data.frame())
+      } # Handle empty samples
+
+      sample_data$sample_id <- paste0(stratum, "_resample_", i)
+      sample_data
+    })
+
+    # Filter out empty data frames and combine
+    valid_samples <- stratum_resampled_list[sapply(stratum_resampled_list, nrow) > 0]
+    if (length(valid_samples) > 0) {
+      do.call(rbind, valid_samples)
+    } else {
+      data.frame()
     }
+  })
 
-    resampled_data <- rbind(resampled_data, stratum_resampled)
+  # Filter out empty data frames and combine
+  valid_strata <- resampled_list[sapply(resampled_list, nrow) > 0]
+  if (length(valid_strata) > 0) {
+    do.call(rbind, valid_strata)
+  } else {
+    data.frame()
   }
-
-  return(resampled_data)
 }
