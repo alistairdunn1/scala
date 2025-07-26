@@ -3,22 +3,20 @@
 #' Creates ggplot visualizations of length composition results.
 #'
 #' @param x An object of class \code{length_composition}
-#' @param type Character, either "by_stratum" or "total" (default: "total")
-#' @param show_uncertainty Logical, whether to show 95% CI ribbons (default: TRUE)
-#' @param sex_colours Named vector of colours for each sex category
-#' @param title Character, plot title
-#' @param y_axis Character, either "composition" or "proportion" (default: "composition")
+#' @param by_stratum Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.
+#' @param show_uncertainty Logical, whether to show 95 percent confidence interval ribbons if bootstrap results are available. Default is TRUE.
+#' @param sex_colours Named vector of colours for each sex category. If NULL, uses default colourblind-friendly palette.
+#' @param type Character, either "composition" or "proportion" (or partial matches). Default is "composition".
 #' @param ... Additional arguments (not used)
 #'
 #' @return A ggplot object
 #'
 #' @export
 plot.length_composition <- function(x,
-                                    type = "total",
+                                    by_stratum = FALSE,
                                     show_uncertainty = TRUE,
                                     sex_colours = NULL,
-                                    title = NULL,
-                                    y_axis = "composition",
+                                    type = "composition",
                                     ...) {
   # Check if ggplot2 is available
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -30,12 +28,11 @@ plot.length_composition <- function(x,
     stop("Input must be an object of class 'length_composition'")
   }
 
-  if (!type %in% c("total", "by_stratum")) {
-    stop("type must be either 'total' or 'by_stratum'")
-  }
-
-  if (!y_axis %in% c("composition", "proportion")) {
-    stop("y_axis must be either 'composition' or 'proportion'")
+  # Use pmatch for partial matching of type parameter
+  type_options <- c("composition", "proportion")
+  type <- type_options[pmatch(type, type_options)]
+  if (is.na(type)) {
+    stop("type must be either 'composition' or 'proportion'")
   }
 
   # Set default colours (colourblind-friendly palette)
@@ -48,13 +45,13 @@ plot.length_composition <- function(x,
     )
   }
 
-  # Determine which dataset to use based on type
-  if (type == "total") {
+  # Determine which dataset to use based on by_stratum
+  if (!by_stratum) {
     plot_data <- x$totals
     if (is.null(plot_data) || nrow(plot_data) == 0) {
       stop("No total composition data available. Ensure calculate_length_compositions was run with appropriate data.")
     }
-  } else if (type == "by_stratum") {
+  } else {
     plot_data <- x$by_stratum
     if (is.null(plot_data) || nrow(plot_data) == 0) {
       stop("No by-stratum composition data available. Ensure calculate_length_compositions was run with stratum data.")
@@ -62,9 +59,9 @@ plot.length_composition <- function(x,
   }
 
   # Convert composition to proportion if requested
-  if (y_axis == "proportion") {
+  if (type == "proportion") {
     # Calculate proportions within each sex and (if applicable) stratum
-    if (type == "total") {
+    if (!by_stratum) {
       plot_data <- plot_data %>%
         dplyr::group_by(sex) %>%
         dplyr::mutate(
@@ -109,30 +106,20 @@ plot.length_composition <- function(x,
     ggplot2::scale_fill_manual(values = used_colours)
 
   # Set up faceting for by_stratum plots
-  if (type == "by_stratum") {
+  if (by_stratum) {
     p <- p + ggplot2::facet_grid(stratum ~ sex, scales = "free_y")
   }
 
   # Add labels and theme
-  y_label <- if (y_axis == "composition") "Scaled Length Composition" else "Proportion"
+  y_label <- if (type == "composition") "Scaled Length Composition" else "Proportion"
 
   p <- p +
     ggplot2::labs(
       x = "Length (cm)",
       y = y_label,
       colour = "Sex",
-      fill = "Sex",
-      title = title %||% paste("Length Composition", if (type == "by_stratum") "by Stratum" else "(Total)")
-    ) +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(
-      panel.grid.minor = ggplot2::element_blank(),
-      legend.position = if (type == "by_stratum") "none" else "bottom",
-      strip.text = ggplot2::element_text(face = "bold")
+      fill = "Sex"
     )
 
   return(p)
 }
-
-# Helper operator for default values
-"%||%" <- function(a, b) if (is.null(a)) b else a

@@ -66,7 +66,7 @@
 #' **Bootstrap uncertainty estimation:**
 #' When bootstraps > 0, the function provides multiple uncertainty measures:
 #' - Coefficient of Variation (CV): Relative variability as standard deviation / mean
-#' - Empirical 95% confidence intervals: 2.5th and 97.5th percentiles of bootstrap distribution
+#' - Empirical 95 percent confidence intervals: 2.5th and 97.5th percentiles of bootstrap distribution
 #' The confidence intervals are non-parametric and do not assume any distributional form.
 #'
 #' **Data validation:**
