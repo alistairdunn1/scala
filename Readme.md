@@ -196,15 +196,19 @@ The package supports two scaling approaches:
 The package provides the following main functions:
 
 - **`calculate_length_compositions()`**: Main function for calculating length compositions with optional bootstrap uncertainty estimation
+- **`calculate_age_compositions()`**: Convert length compositions to age compositions using age-length keys
 - **`generate_test_data()`**: Generate sample datasets for testing and examples  
 - **`generate_commercial_test_data()`**: Generate commercial fisheries test data
 - **`generate_survey_test_data()`**: Generate research survey test data
+- **`generate_age_length_key()`**: Create sample age-length keys with various growth models
 - **`get_default_lw_params()`**: Get default length-weight parameters for testing
 - **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
-- **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from proportions and CVs
-- **`calculate_all_multinomial_n()`**: Calculate effective sample sizes for all stratum/sex combinations
+- **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from length or age composition proportions and CVs
+- **`calculate_all_multinomial_n()`**: Calculate effective sample sizes for all stratum/sex combinations from length or age compositions
 - **`plot.length_composition()`**: Create professional visualizations with lines and uncertainty ribbons (requires ggplot2)
+- **`plot.age_composition()`**: Visualize age compositions with uncertainty ribbons
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
+- **`plot_age_length_key()`**: Visualize age-length keys as heatmaps
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
 
 ### Enhanced Plotting Features
@@ -219,16 +223,30 @@ The plotting system now includes:
 
 ### Multinomial Effective Sample Size
 
-New functionality for calculating multinomial effective sample sizes:
+Functionality for calculating multinomial effective sample sizes from both length and age compositions:
 - **Individual calculations** for specific stratum and sex combinations
 - **Batch processing** for all combinations simultaneously
 - **Robust fitting** with outlier detection and removal options
 - **Quality diagnostics** including model fit statistics
+- **Compatible with both length and age composition data**
 
 This is particularly useful for:
 - Stock assessment applications requiring effective sample sizes
 - Data weighting in integrated models
 - Quality control of length composition data
+
+### Age Composition Analysis
+
+New functionality for converting length compositions to age compositions:
+- **Age-length key application** with uncertainty propagation through bootstrap iterations
+- **Multiple growth models** including linear, von Bertalanffy, and logistic relationships
+- **Bootstrap uncertainty estimation** for age compositions, providing CVs and 95% confidence intervals
+- **Comprehensive visualization** with uncertainty ribbons and multi-panel plotting
+
+This enables:
+- Full age composition analysis from length-based sampling
+- Uncertainty estimation for age compositions accounting for both sampling and age-length key uncertainty
+- Stock assessment ready outputs with proper uncertainty quantification
 
 For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_length_compositions`).
 
@@ -969,7 +987,7 @@ cat("Effective sample size for North stratum males:", eff_n_male$effective_n, "\
 # Calculate for pooled data (recommended for stock assessment)
 eff_n_total <- calculate_multinomial_n(results, sex = "total")
 cat("Pooled effective sample size:", eff_n_total$effective_n, "\n")
-cat("Based on", eff_n_total$n_length_bins, "length bins\n")
+cat("Based on", eff_n_total$n_bins, "length bins\n")
 cat("Model fit quality (residual SE):", round(eff_n_total$fit_summary$sigma, 4), "\n")
 
 # Use stricter filtering for robust estimates
@@ -981,6 +999,68 @@ robust_n <- calculate_all_multinomial_n(
 )
 print("Robust effective sample sizes:")
 print(robust_n)
+```
+
+### Age Composition Analysis
+
+```r
+# Create age-length key using von Bertalanffy growth
+age_key <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 8),
+  growth_type = "vonbert",
+  growth_params = list(linf = 50, k = 0.3, t0 = -0.5),
+  cv = 0.25
+)
+
+# Visualize the age-length key
+plot_age_length_key(age_key)
+
+# Convert length compositions to age compositions
+age_results <- calculate_age_compositions(
+  x = results,
+  age_length_key = age_key,
+  age_range = c(1, 8)
+)
+
+# View age composition results
+print(age_results)
+
+# Plot age compositions with uncertainty
+plot(age_results, type = "composition", include_uncertainty = TRUE)
+
+# Compare different growth models
+age_key_linear <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 8),
+  growth_type = "linear",
+  growth_params = list(intercept = -2, slope = 0.25)
+)
+
+age_results_linear <- calculate_age_compositions(
+  x = results,
+  age_length_key = age_key_linear,
+  age_range = c(1, 8)
+)
+
+# Calculate effective sample sizes for age compositions
+age_eff_n <- calculate_multinomial_n(age_results, sex = "total")
+cat("Age composition effective sample size:", age_eff_n$effective_n, "\n")
+
+# Compare length vs age effective sample sizes
+length_eff_n <- calculate_multinomial_n(results, sex = "total")
+cat("\nComparison of effective sample sizes:\n")
+cat("Length compositions:", length_eff_n$effective_n, "based on", length_eff_n$n_bins, "length bins\n")
+cat("Age compositions:", age_eff_n$effective_n, "based on", age_eff_n$n_bins, "age bins\n")
+
+# Calculate effective sample sizes for all combinations (both length and age)
+all_length_n <- calculate_all_multinomial_n(results)
+all_age_n <- calculate_all_multinomial_n(age_results)
+cat("\nEffective sample sizes by stratum and sex:\n")
+print("Length compositions:")
+print(all_length_n)
+print("Age compositions:")
+print(all_age_n)
 ```
 
 ## Notes for Real Applications

@@ -12,7 +12,8 @@ Encoding: UTF-8
 RoxygenNote: 7.3.2
 Depends: 
     R (>= 4.0.0),
-    ggplot2
+    ggplot2,
+    rlang
 Imports:
     stats,
     dplyr

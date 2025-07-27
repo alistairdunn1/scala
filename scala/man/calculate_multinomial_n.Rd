@@ -15,7 +15,7 @@ calculate_multinomial_n(
 )
 }
 \arguments{
-\item{x}{A length_composition object from calculate_length_compositions()}
+\item{x}{A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()}
 
 \item{stratum}{Character, name of stratum to analyze. If NULL (default), uses pooled data across all strata}
 
@@ -34,15 +34,15 @@ Named list containing:
   \itemize{
     \item \code{effective_n}: The estimated multinomial effective sample size
     \item \code{proportions}: Vector of proportions used in the analysis
-    \item \code{cvs}: Vector of CVs used in the analysis  
-    \item \code{n_length_bins}: Number of length bins included in the analysis
+    \item \code{cvs}: Vector of CVs used in the analysis
+    \item \code{n_bins}: Number of length or age bins included in the analysis
     \item \code{fit_summary}: Summary of the nonlinear model fit
   }
 }
 \description{
-Calculates the multinomial effective sample size from length composition proportions and
+Calculates the multinomial effective sample size from length or age composition proportions and
 their coefficients of variation. This provides a measure of the effective sample size
-that accounts for the variability in the length composition data.
+that accounts for the variability in the composition data.
 }
 \details{
 The function fits a nonlinear model based on the multinomial distribution relationship:
@@ -50,22 +50,23 @@ CV = sqrt(n * P * (1 - P)) / (n * P)
 
 where:
 - CV is the coefficient of variation
-- P is the proportion 
+- P is the proportion
 - n is the effective sample size (parameter to be estimated)
 
-Length bins with very small proportions or very large CVs are excluded as they
+Bins with very small proportions or very large CVs are excluded as they
 can unduly influence the fit. An optional outlier removal step can be applied
 to improve the robustness of the estimate.
 }
 \examples{
 \dontrun{
+# For length compositions
 test_data <- generate_test_data()
 lc_result <- calculate_length_compositions(
   fish_data = test_data$fish_data,
   strata_data = test_data$strata_data,
   length_range = c(20, 40),
   lw_params_male = c(a = 0.01, b = 3.0),
-  lw_params_female = c(a = 0.01, b = 3.0), 
+  lw_params_female = c(a = 0.01, b = 3.0),
   lw_params_unsexed = c(a = 0.01, b = 3.0),
   bootstraps = 100
 )
@@ -76,6 +77,16 @@ print(eff_n$effective_n)
 
 # Calculate for specific stratum and sex
 eff_n_male_a <- calculate_multinomial_n(lc_result, stratum = "A", sex = "male")
+
+# For age compositions
+age_key <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 10),
+  growth_model = "von_bertalanffy",
+  params = list(L_inf = 35, k = 0.3, t0 = -0.1)
+)
+ac_result <- calculate_age_compositions(lc_result, age_key)
+eff_n_age <- calculate_multinomial_n(ac_result, sex = "total")
 }
 
 }
@@ -85,5 +96,6 @@ Fisheries Bulletin 94: 498-505.
 }
 \seealso{
 \code{\link{calculate_length_compositions}} for generating length composition data,
+\code{\link{calculate_age_compositions}} for generating age composition data,
 \code{\link{get_summary}} for summary statistics including CVs
 }

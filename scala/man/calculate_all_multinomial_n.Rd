@@ -15,7 +15,7 @@ calculate_all_multinomial_n(
 )
 }
 \arguments{
-\item{x}{A length_composition object from calculate_length_compositions()}
+\item{x}{A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()}
 
 \item{sex_categories}{Character vector of sex categories to analyze. Default is all: c("male", "female", "unsexed", "total")}
 
@@ -33,21 +33,25 @@ calculate_all_multinomial_n(
 Data frame with columns:
   \itemize{
     \item \code{stratum}: Stratum name ("Pooled" for pooled results)
-    \item \code{sex}: Sex category  
+    \item \code{sex}: Sex category
     \item \code{effective_n}: Estimated effective sample size
-    \item \code{n_length_bins}: Number of length bins used
+    \item \code{n_bins}: Number of length or age bins used
     \item \code{fit_quality}: Model fit quality (residual standard error)
   }
 }
 \description{
 Calculates multinomial effective sample sizes for all combinations of strata and sex categories
-from a length_composition object. Returns a summary table with effective sample sizes.
+from a length_composition or age_composition object. Returns a summary table with effective sample sizes.
 }
 \examples{
 \dontrun{
-# Calculate for all combinations
+# Calculate for all combinations from length compositions
 all_n <- calculate_all_multinomial_n(lc_result)
 print(all_n)
+
+# Calculate for all combinations from age compositions
+all_n_age <- calculate_all_multinomial_n(ac_result)
+print(all_n_age)
 
 # Calculate only for total, including pooled
 total_n <- calculate_all_multinomial_n(lc_result, sex_categories = "total")
