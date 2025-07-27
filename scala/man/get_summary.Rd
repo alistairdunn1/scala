@@ -30,24 +30,22 @@ get_summary(
 A list containing summary statistics:
 \describe{
   \item{mean_weighted_cv}{Mean weighted coefficient of variation}
-  \item{n_fish}{Number of fish sampled by sex category}
-  \item{total_fish}{Total number of fish sampled}
-  \item{n_hauls}{Total number of hauls/samples}
+  \item{n}{Number of fish sampled by sex category, total sampled fish, and the number of hauls sampled}
 }
 }
 \description{
-This function calculates summary statistics from a length composition object, 
+This function calculates summary statistics from a length composition object,
 including mean weighted coefficient of variation (CV), number of fish sampled,
 and total number of hauls sampled.
 }
 \details{
 The function calculates the mean weighted CV using the formula:
 \deqn{CV_{weighted} = \frac{\sum_{i} w_i \times CV_i}{\sum_{i} w_i}}
-where \eqn{w_i} are the composition values (weights) and \eqn{CV_i} are the 
+where \eqn{w_i} are the composition values (weights) and \eqn{CV_i} are the
 coefficient of variation values.
 
 Fish counts and haul counts are extracted from pre-computed summary statistics
-stored during the length composition calculations. When \code{length_range} is 
+stored during the length composition calculations. When \code{length_range} is
 specified, a warning is issued as fish counts represent the full range used in
 the original calculation.
 

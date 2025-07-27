@@ -21,14 +21,14 @@
 #' result1 <- calculate_length_compositions(...)
 #' result2 <- calculate_length_compositions(...)
 #' results_list <- list("Scenario A" = result1, "Scenario B" = result2)
-#' 
+#'
 #' # Plot comparison
 #' plot_length_composition_comparison(results_list)
-#' 
+#'
 #' # Plot specific stratum comparison
 #' plot_length_composition_comparison(results_list, by_stratum = TRUE, stratum = "North")
 #' }
-#' 
+#'
 #' @importFrom ggplot2 ggplot aes geom_line geom_ribbon facet_grid labs ylim
 #' @importFrom tools toTitleCase
 #' @export
@@ -50,7 +50,7 @@ plot_length_composition_comparison <- function(x,
   if (!is.list(x) || length(x) == 0) {
     stop("Input must be a non-empty list of length_composition objects")
   }
-  
+
   # Check that all elements are length_composition objects
   for (i in seq_along(x)) {
     if (!inherits(x[[i]], "length_composition")) {
@@ -88,7 +88,6 @@ plot_length_composition_comparison <- function(x,
 
   # Helper function to extract data from a single length_composition object
   extract_composition_data <- function(lc_obj, element_name) {
-    
     # Determine which dataset to use based on by_stratum
     if (!by_stratum) {
       # Use pooled data across all strata
@@ -112,7 +111,7 @@ plot_length_composition_comparison <- function(x,
           comp_data <- comp_data / total_counts
         }
       }
-      
+
       # Apply length binning if requested
       lengths_vec <- as.numeric(rownames(comp_data))
       if (!is.null(length_bin_size)) {
@@ -120,7 +119,7 @@ plot_length_composition_comparison <- function(x,
         bin_result <- aggregate_length_bins_helper(comp_data, lengths_vec, length_bin_size)
         comp_data <- bin_result$data
         lengths_vec <- bin_result$lengths
-        
+
         # Apply binning to confidence intervals if available
         if (!is.null(ci_lower) && !is.null(ci_upper)) {
           ci_lower_bin <- aggregate_length_bins_helper(ci_lower, as.numeric(rownames(ci_lower)), length_bin_size)
@@ -129,7 +128,6 @@ plot_length_composition_comparison <- function(x,
           ci_upper <- ci_upper_bin$data
         }
       }
-      
     } else {
       # Use by-stratum data
       if (!is.null(lc_obj$length_composition)) {
@@ -160,7 +158,7 @@ plot_length_composition_comparison <- function(x,
           comp_data_3d <- comp_data_prop
         }
       }
-      
+
       # Select specific stratum
       available_strata <- dimnames(comp_data_3d)[[3]]
       if (is.null(stratum)) {
@@ -172,19 +170,19 @@ plot_length_composition_comparison <- function(x,
         }
         selected_stratum <- stratum
       }
-      
+
       # Extract data for selected stratum
       comp_data <- comp_data_3d[, , selected_stratum]
       ci_lower <- if (!is.null(ci_lower_3d)) ci_lower_3d[, , selected_stratum] else NULL
       ci_upper <- if (!is.null(ci_upper_3d)) ci_upper_3d[, , selected_stratum] else NULL
-      
+
       # Apply length binning if requested
       lengths_vec <- as.numeric(dimnames(comp_data_3d)[[1]])
       if (!is.null(length_bin_size)) {
         bin_result <- aggregate_length_bins_helper(comp_data, lengths_vec, length_bin_size)
         comp_data <- bin_result$data
         lengths_vec <- bin_result$lengths
-        
+
         # Apply binning to confidence intervals if available
         if (!is.null(ci_lower) && !is.null(ci_upper)) {
           ci_lower_bin <- aggregate_length_bins_helper(ci_lower, lengths_vec, length_bin_size)
@@ -199,7 +197,7 @@ plot_length_composition_comparison <- function(x,
     all_sex_categories <- colnames(comp_data)
     # Filter out non-sex categories like "composition"
     valid_sex_categories <- all_sex_categories[all_sex_categories %in% c("male", "female", "unsexed", "total")]
-    
+
     sex_categories <- if (unsexed) {
       valid_sex_categories
     } else {
@@ -240,11 +238,11 @@ plot_length_composition_comparison <- function(x,
 
     min_length <- min(lengths_vec, na.rm = TRUE)
     max_length <- max(lengths_vec, na.rm = TRUE)
-    
+
     if (!is.finite(min_length) || !is.finite(max_length)) {
       return(list(data = data_array, lengths = lengths_vec))
     }
-    
+
     bin_breaks <- seq(from = min_length, to = max_length + bin_size, by = bin_size)
     bin_centers <- bin_breaks[-length(bin_breaks)] + bin_size / 2
     length_bins <- cut(lengths_vec, breaks = bin_breaks, include.lowest = TRUE, right = FALSE)
@@ -254,7 +252,7 @@ plot_length_composition_comparison <- function(x,
       aggregated_data <- matrix(0, nrow = length(bin_centers), ncol = ncol(data_array))
       rownames(aggregated_data) <- as.character(bin_centers)
       colnames(aggregated_data) <- colnames(data_array)
-      
+
       for (i in seq_along(lengths_vec)) {
         if (!is.na(bin_indices[i])) {
           aggregated_data[bin_indices[i], ] <- aggregated_data[bin_indices[i], ] + data_array[i, ]
@@ -300,21 +298,12 @@ plot_length_composition_comparison <- function(x,
 
   # Add labels and theme
   y_label <- if (type == "composition") "Scaled length composition" else "Scaled length proportions"
-  
+
   # Update x-axis label if binning is used
   x_label <- if (!is.null(length_bin_size)) {
     paste0("Length bins (", length_bin_size, " cm)")
   } else {
     "Length (cm)"
-  }
-  
-  # Add stratum info to title if applicable
-  title_suffix <- if (by_stratum && !is.null(stratum)) {
-    paste(" - Stratum:", tools::toTitleCase(stratum))
-  } else if (by_stratum) {
-    " - By Stratum"
-  } else {
-    " - Pooled"
   }
 
   p <- p +
@@ -322,8 +311,7 @@ plot_length_composition_comparison <- function(x,
       x = x_label,
       y = y_label,
       colour = "Sex",
-      fill = "Sex",
-      title = paste("Length Composition Comparison", title_suffix)
+      fill = "Sex"
     )
 
   return(p)

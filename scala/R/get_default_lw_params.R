@@ -13,7 +13,7 @@
 #' @details
 #' Default parameters are based on Ross Sea toothfish (Dissostichus mawsoni).
 #' The length-weight relationship follows the allometric equation:
-#' Weight (g) = a × Length(cm)^b
+#' Weight (g) = a * Length(cm)^b
 #'
 #' Parameters are sex-specific to account for sexual dimorphism in growth:
 #' \itemize{

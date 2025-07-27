@@ -3,13 +3,19 @@
 #' Converts length compositions to age compositions by applying age-length keys.
 #' Propagates uncertainty from bootstrap length composition estimates through
 #' the age-length transformation to provide age composition CVs and confidence intervals.
+#' Supports sex-specific age-length keys for improved biological realism.
 #'
 #' @param x A length_composition object from calculate_length_compositions()
-#' @param age_length_key Data frame with columns: length, age, and proportion.
+#' @param age_length_key Either:
+#'   \itemize{
+#'     \item A single data frame with columns: length, age, and proportion (applied to all sex categories)
+#'     \item A named list with elements: male, female, unsexed (each a data frame with length, age, proportion)
+#'   }
 #'   Each length should have proportions summing to 1 across ages.
 #' @param age_range Numeric vector of min and max ages to include (e.g., c(1, 10))
 #' @param plus_group_age Logical, combine ages >= max age into a plus group (default FALSE)
 #' @param minus_group_age Logical, combine ages <= min age into a minus group (default FALSE)
+#' @param verbose Logical, whether to print progress messages (default TRUE)
 #'
 #' @return List containing:
 #'   \itemize{
@@ -36,7 +42,8 @@
 #'     \item \code{minus_group_age}: Minus group setting for ages
 #'     \item \code{has_sex_data}: TRUE (indicates sex-specific analysis)
 #'     \item \code{scaling_type}: Type of scaling applied
-#'     \item \code{age_length_key}: The age-length key used in calculations
+#'     \item \code{age_length_key}: The age-length key(s) used in calculations
+#'     \item \code{sex_specific_keys}: Logical indicating whether sex-specific keys were used
 #'   }
 #'
 #' @details
@@ -49,15 +56,26 @@
 #' 3. **Confidence intervals**: Empirical 95% CIs from bootstrap distribution
 #' 4. **Coefficients of variation**: Bootstrap-based CV estimates
 #'
-#' **Age-length key requirements:**
-#' - Must contain columns: length, age, proportion
+#' **Age-length key formats:**
+#'
+#' *Single key (applied to all sexes):*
+#' - Data frame with columns: length, age, proportion
 #' - Proportions for each length must sum to 1 across ages
+#'
+#' *Sex-specific keys:*
+#' - Named list with elements: male, female, unsexed
+#' - Each element is a data frame with columns: length, age, proportion
+#' - Allows for sex-specific growth patterns and maturation
+#' - If unsexed fish are present but no unsexed key provided, male key is used
+#'
+#' **Requirements:**
 #' - Should cover all length bins present in the length composition data
 #' - Missing length-age combinations are assumed to have proportion = 0
+#' - Proportions for each length must sum to 1 across ages (within each sex)
 #'
 #' **Bootstrap uncertainty propagation:**
 #' Each bootstrap iteration of length compositions is converted to age compositions
-#' using the same age-length key, preserving the correlation structure and
+#' using the same age-length key(s), preserving the correlation structure and
 #' providing realistic uncertainty estimates for the age compositions.
 #'
 #' @examples
@@ -74,28 +92,59 @@
 #'   bootstraps = 100
 #' )
 #'
-#' # Create sample age-length key
-#' age_key <- expand.grid(length = 20:40, age = 1:8)
-#' age_key$proportion <- with(age_key, {
-#'   # Simple relationship: younger fish at smaller lengths
-#'   dnorm(age, mean = (length - 15) / 3, sd = 2)
-#' })
-#' # Normalize proportions within each length
-#' age_key <- age_key %>%
-#'   group_by(length) %>%
-#'   mutate(proportion = proportion / sum(proportion)) %>%
-#'   ungroup()
+#' # Example 1: Single age-length key (applied to all sexes)
+#' age_key <- generate_age_length_key(
+#'   length_range = c(20, 40),
+#'   age_range = c(1, 8),
+#'   growth_type = "vonbert"
+#' )
 #'
-#' # Calculate age compositions
 #' age_result <- calculate_age_compositions(
 #'   x = lc_result,
 #'   age_length_key = age_key,
 #'   age_range = c(1, 8)
 #' )
 #'
-#' # View results
-#' print(age_result)
-#' plot(age_result)
+#' # Example 2: Sex-specific age-length keys
+#' # Males mature faster (younger at given length)
+#' male_key <- generate_age_length_key(
+#'   length_range = c(20, 40),
+#'   age_range = c(1, 8),
+#'   growth_type = "vonbert",
+#'   growth_params = list(linf = 35, k = 0.35, t0 = -0.5)
+#' )
+#'
+#' # Females grow larger/older
+#' female_key <- generate_age_length_key(
+#'   length_range = c(20, 40),
+#'   age_range = c(1, 8),
+#'   growth_type = "vonbert",
+#'   growth_params = list(linf = 40, k = 0.25, t0 = -0.8)
+#' )
+#'
+#' # Unsexed fish use intermediate growth
+#' unsexed_key <- generate_age_length_key(
+#'   length_range = c(20, 40),
+#'   age_range = c(1, 8),
+#'   growth_type = "vonbert",
+#'   growth_params = list(linf = 37, k = 0.30, t0 = -0.6)
+#' )
+#'
+#' sex_specific_keys <- list(
+#'   male = male_key,
+#'   female = female_key,
+#'   unsexed = unsexed_key
+#' )
+#'
+#' age_result_sex <- calculate_age_compositions(
+#'   x = lc_result,
+#'   age_length_key = sex_specific_keys,
+#'   age_range = c(1, 8)
+#' )
+#'
+#' # View and plot results
+#' print(age_result_sex)
+#' plot(age_result_sex)
 #' }
 #'
 #' @seealso
@@ -108,31 +157,78 @@ calculate_age_compositions <- function(x,
                                        age_length_key,
                                        age_range = NULL,
                                        plus_group_age = FALSE,
-                                       minus_group_age = FALSE) {
+                                       minus_group_age = FALSE,
+                                       verbose = TRUE) {
   # Validate input
   if (!inherits(x, "length_composition")) {
     stop("x must be a length_composition object from calculate_length_compositions()")
   }
 
-  # Validate age-length key
-  required_cols <- c("length", "age", "proportion")
-  if (!all(required_cols %in% names(age_length_key))) {
-    stop("age_length_key must contain columns: ", paste(required_cols, collapse = ", "))
-  }
+  # Determine if sex-specific keys are provided
+  sex_specific_keys <- is.list(age_length_key) && !is.data.frame(age_length_key)
 
-  # Check that proportions sum to 1 for each length
-  prop_sums <- aggregate(proportion ~ length, data = age_length_key, sum)
-  if (any(abs(prop_sums$proportion - 1) > 1e-6)) {
-    warning("Age-length key proportions do not sum to 1 for some lengths. Normalizing...")
-    # Normalize proportions using base R
-    age_length_key$proportion <- ave(age_length_key$proportion, age_length_key$length,
-      FUN = function(x) x / sum(x)
-    )
+  if (sex_specific_keys) {
+    # Validate sex-specific age-length keys
+    required_sexes <- c("male", "female")
+    optional_sexes <- c("unsexed")
+
+    if (!all(required_sexes %in% names(age_length_key))) {
+      stop("Sex-specific age_length_key must contain at least 'male' and 'female' elements")
+    }
+
+    # Check each sex-specific key
+    for (sex_name in names(age_length_key)) {
+      if (!sex_name %in% c(required_sexes, optional_sexes)) {
+        warning("Unknown sex category '", sex_name, "' in age_length_key. Valid options: male, female, unsexed")
+      }
+
+      key <- age_length_key[[sex_name]]
+      required_cols <- c("length", "age", "proportion")
+      if (!all(required_cols %in% names(key))) {
+        stop("Age-length key for '", sex_name, "' must contain columns: ", paste(required_cols, collapse = ", "))
+      }
+
+      # Check proportions sum to 1 for each length within this sex
+      prop_sums <- aggregate(proportion ~ length, data = key, sum)
+      if (any(abs(prop_sums$proportion - 1) > 1e-6)) {
+        if (verbose) cat("Normalizing age-length key proportions for", sex_name, "...\n")
+        age_length_key[[sex_name]]$proportion <- ave(key$proportion, key$length,
+          FUN = function(x) x / sum(x)
+        )
+      }
+    }
+
+    # Use male key for unsexed if not provided
+    if (!"unsexed" %in% names(age_length_key)) {
+      if (verbose) cat("Using male age-length key for unsexed fish...\n")
+      age_length_key$unsexed <- age_length_key$male
+    }
+  } else {
+    # Single age-length key validation
+    required_cols <- c("length", "age", "proportion")
+    if (!all(required_cols %in% names(age_length_key))) {
+      stop("age_length_key must contain columns: ", paste(required_cols, collapse = ", "))
+    }
+
+    # Check that proportions sum to 1 for each length
+    prop_sums <- aggregate(proportion ~ length, data = age_length_key, sum)
+    if (any(abs(prop_sums$proportion - 1) > 1e-6)) {
+      if (verbose) cat("Normalizing age-length key proportions...\n")
+      age_length_key$proportion <- ave(age_length_key$proportion, age_length_key$length,
+        FUN = function(x) x / sum(x)
+      )
+    }
   }
 
   # Set age range if not provided
   if (is.null(age_range)) {
-    age_range <- range(age_length_key$age)
+    if (sex_specific_keys) {
+      # Get age range from all sex-specific keys
+      all_ages <- unlist(lapply(age_length_key, function(key) key$age))
+      age_range <- range(all_ages)
+    } else {
+      age_range <- range(age_length_key$age)
+    }
   }
 
   ages <- age_range[1]:age_range[2]
@@ -140,7 +236,7 @@ calculate_age_compositions <- function(x,
   n_strata <- length(x$strata_names)
   sex_categories <- c("composition", "male", "female", "unsexed", "total")
 
-  cat("Converting length compositions to age compositions using age-length key...\n")
+  if (verbose) cat("Converting length compositions to age compositions using age-length key...\n")
 
   # Apply age-length key to main length compositions
   main_age_comp <- apply_age_length_key(
@@ -149,7 +245,8 @@ calculate_age_compositions <- function(x,
     ages = ages,
     lengths = x$lengths,
     plus_group_age = plus_group_age,
-    minus_group_age = minus_group_age
+    minus_group_age = minus_group_age,
+    sex_specific_keys = sex_specific_keys
   )
 
   # Calculate age proportions from main compositions
@@ -173,7 +270,7 @@ calculate_age_compositions <- function(x,
 
   # Process bootstrap results if available
   if (x$n_bootstraps > 0) {
-    cat("Processing", x$n_bootstraps, "bootstrap iterations for age compositions...\n")
+    if (verbose) cat("Processing", x$n_bootstraps, "bootstrap iterations for age compositions...\n")
 
     # Initialize bootstrap arrays
     age_bootstraps <- array(0, dim = c(n_ages, 5, n_strata, x$n_bootstraps))
@@ -183,7 +280,7 @@ calculate_age_compositions <- function(x,
 
     # Apply age-length key to each bootstrap iteration
     for (b in 1:x$n_bootstraps) {
-      if (b %% 50 == 0) cat("Age composition bootstrap iteration", b, "of", x$n_bootstraps, "\n")
+      if (verbose && b %% 50 == 0) cat("Age composition bootstrap iteration", b, "of", x$n_bootstraps, "\n")
 
       boot_age_comp <- apply_age_length_key(
         length_comp = x$lc_bootstraps[, , , b],
@@ -191,7 +288,8 @@ calculate_age_compositions <- function(x,
         ages = ages,
         lengths = x$lengths,
         plus_group_age = plus_group_age,
-        minus_group_age = minus_group_age
+        minus_group_age = minus_group_age,
+        sex_specific_keys = sex_specific_keys
       )
 
       age_bootstraps[, , , b] <- boot_age_comp
@@ -240,7 +338,7 @@ calculate_age_compositions <- function(x,
     pooled_age_prop_cv <- ifelse(pooled_age_prop_mean > 0, pooled_age_prop_sd / pooled_age_prop_mean, 0)
 
     # Calculate empirical 95% confidence intervals
-    cat("Calculating empirical 95% confidence intervals for age compositions...\n")
+    if (verbose) cat("Calculating empirical 95% confidence intervals for age compositions...\n")
 
     age_ci_lower <- apply(age_bootstraps, c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
     age_ci_upper <- apply(age_bootstraps, c(1, 2, 3), quantile, probs = 0.975, na.rm = TRUE)
@@ -301,97 +399,10 @@ calculate_age_compositions <- function(x,
     minus_group_age = minus_group_age,
     has_sex_data = TRUE,
     scaling_type = x$scaling_type,
-    age_length_key = age_length_key
+    age_length_key = age_length_key,
+    sex_specific_keys = sex_specific_keys
   )
 
   class(results) <- "age_composition"
   return(results)
-}
-
-#' Apply Age-Length Key to Length Compositions
-#'
-#' Internal function to convert length compositions to age compositions using age-length key.
-#'
-#' @param length_comp 3D array of length compositions (length x sex x stratum)
-#' @param age_length_key Data frame with length, age, proportion columns
-#' @param ages Vector of age bins
-#' @param lengths Vector of length bins
-#' @param plus_group_age Logical, whether to apply plus group for ages
-#' @param minus_group_age Logical, whether to apply minus group for ages
-#'
-#' @return 3D array of age compositions (age x sex x stratum)
-#' @keywords internal
-apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
-                                 plus_group_age = FALSE, minus_group_age = FALSE) {
-  n_ages <- length(ages)
-  n_strata <- dim(length_comp)[3]
-  sex_categories <- c("composition", "male", "female", "unsexed", "total")
-
-  # Initialize age composition array
-  age_comp <- array(0, dim = c(n_ages, 5, n_strata))
-  dimnames(age_comp) <- list(ages, sex_categories, dimnames(length_comp)[[3]])
-
-  # Set age values in first column
-  age_comp[, "composition", ] <- ages
-
-  # Convert age-length key to matrix for faster lookup
-  alk_matrix <- matrix(0, nrow = length(lengths), ncol = length(ages))
-  rownames(alk_matrix) <- as.character(lengths)
-  colnames(alk_matrix) <- as.character(ages)
-
-  for (i in seq_len(nrow(age_length_key))) {
-    len_char <- as.character(age_length_key$length[i])
-    age_char <- as.character(age_length_key$age[i])
-    if (len_char %in% rownames(alk_matrix) && age_char %in% colnames(alk_matrix)) {
-      alk_matrix[len_char, age_char] <- age_length_key$proportion[i]
-    }
-  }
-
-  # Apply age-length key to each stratum and sex category
-  for (s in 1:n_strata) {
-    for (sex_idx in 2:5) { # Skip "composition" column
-      sex_name <- sex_categories[sex_idx]
-
-      # Get length composition for this stratum and sex
-      length_data <- length_comp[, sex_name, s]
-
-      # Apply age-length key
-      for (len_idx in seq_along(lengths)) {
-        len_char <- as.character(lengths[len_idx])
-        if (len_char %in% rownames(alk_matrix)) {
-          len_count <- length_data[len_idx]
-
-          # Distribute across ages according to age-length key
-          for (age_idx in seq_along(ages)) {
-            age_char <- as.character(ages[age_idx])
-            if (age_char %in% colnames(alk_matrix)) {
-              proportion <- alk_matrix[len_char, age_char]
-              age_comp[age_idx, sex_name, s] <- age_comp[age_idx, sex_name, s] +
-                (len_count * proportion)
-            }
-          }
-        }
-      }
-    }
-  }
-
-  # Apply plus/minus groups if specified
-  if (plus_group_age) {
-    # Handle ages above maximum - this would require age-length key extension
-    # For now, just warn if there are ages beyond our range
-    max_age_in_key <- max(age_length_key$age)
-    if (max_age_in_key > max(ages)) {
-      warning("Age-length key contains ages beyond specified age_range. Consider extending age_range or implementing plus group logic.")
-    }
-  }
-
-  if (minus_group_age) {
-    # Handle ages below minimum - similar to plus group
-    min_age_in_key <- min(age_length_key$age)
-    if (min_age_in_key < min(ages)) {
-      warning("Age-length key contains ages below specified age_range. Consider extending age_range or implementing minus group logic.")
-    }
-  }
-
-  return(age_comp)
 }

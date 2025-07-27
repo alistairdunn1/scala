@@ -13,6 +13,7 @@
 #' @param plus_group Logical, combine lengths >= max length into a plus group (default FALSE)
 #' @param minus_group Logical, combine lengths <= min length into a minus group (default FALSE)
 #' @param return_full_bootstraps Logical, whether to return all individual bootstrap results along with summaries (default FALSE)
+#' @param verbose Logical, whether to print progress messages (default TRUE)
 #'
 #' @importFrom stats sd
 #' @importFrom dplyr group_by summarise ungroup mutate left_join bind_rows
@@ -158,7 +159,8 @@ calculate_length_compositions <- function(fish_data,
                                           bootstraps = 0,
                                           plus_group = FALSE,
                                           minus_group = FALSE,
-                                          return_full_bootstraps = FALSE) {
+                                          return_full_bootstraps = FALSE,
+                                          verbose = TRUE) {
   # Validate length-weight parameters
   if (missing(lw_params_male) || missing(lw_params_female) || missing(lw_params_unsexed)) {
     stop("Length-weight parameters are required. Please provide lw_params_male, lw_params_female, and lw_params_unsexed.")
@@ -259,13 +261,13 @@ calculate_length_compositions <- function(fish_data,
   n_strata <- length(strata_names)
 
   # Calculate main length composition
-  cat("Calculating length compositions by sex using", scaling_type, "approach...\n")
+  if (verbose) cat("Calculating length compositions by sex using", scaling_type, "approach...\n")
 
   # Core calculation logic (integrated from calculate_length_compositions)
   main_lf <- calculate_length_compositions_core(fish_data, strata_data, length_range, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed, lengths, strata_names)
 
   # If no bootstrapping requested, return simple result
-  if (bootstraps == 0) {
+  if (verbose && bootstraps == 0) {
     cat("No bootstrap uncertainty estimation requested.\n")
 
     # Create a simple result object with class
@@ -305,7 +307,7 @@ calculate_length_compositions <- function(fish_data,
   }
 
   # Bootstrap if requested
-  if (bootstraps > 0) {
+  if (verbose && bootstraps > 0) {
     cat("Running", bootstraps, "bootstrap iterations...\n")
 
     # Set up bootstrap arrays
@@ -317,8 +319,7 @@ calculate_length_compositions <- function(fish_data,
 
     # Run bootstrap iterations
     for (b in 1:bootstraps) {
-      if (b %% 50 == 0) cat("Bootstrap iteration", b, "of", bootstraps, "\n")
-
+      if (verbose && b %% 50 == 0) cat("Bootstrap iteration", b, "of", bootstraps, "\n")
       # Resample and calculate
       boot_data <- resample_fish_data(fish_data)
       boot_lf <- calculate_length_compositions_core(boot_data, strata_data, length_range, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed, lengths, strata_names)
@@ -373,7 +374,7 @@ calculate_length_compositions <- function(fish_data,
     pooled_prop_cv <- ifelse(pooled_prop_mean > 0, pooled_prop_sd / pooled_prop_mean, 0)
 
     # Calculate empirical 95% confidence intervals
-    cat("Calculating empirical 95% confidence intervals...\n")
+    if (verbose) cat("Calculating empirical 95% confidence intervals...\n")
 
     # Length composition confidence intervals (by stratum)
     lf_ci_lower <- apply(lf_bootstraps, c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)

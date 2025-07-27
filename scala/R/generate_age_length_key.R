@@ -186,71 +186,9 @@ generate_age_length_key <- function(length_range = c(20, 40),
     warning("Proportions do not sum exactly to 1 for some lengths (numerical precision)")
   }
 
+  # Set class for S3 methods
+  class(alk) <- c("age_length_key", "data.frame")
+
   return(alk)
 }
 
-#' Print Method for Age-Length Key
-#'
-#' @param x An age-length key data frame
-#' @param ... Additional arguments (not used)
-#' @export
-print.age_length_key <- function(x, ...) {
-  cat("Age-Length Key\n")
-  cat("=============\n\n")
-
-  cat("Length range:", min(x$length), "-", max(x$length), "\n")
-  cat("Age range:", min(x$age), "-", max(x$age), "\n")
-  cat("Total combinations:", nrow(x), "\n\n")
-
-  # Show sample of the key
-  if (nrow(x) > 20) {
-    cat("First 10 rows:\n")
-    print(head(x, 10), row.names = FALSE)
-    cat("\n... (", nrow(x) - 10, "more rows)\n\n")
-  } else {
-    print(x, row.names = FALSE)
-    cat("\n")
-  }
-
-  # Validation check
-  prop_sums <- aggregate(proportion ~ length, data = x, sum)
-  all_sum_to_one <- all(abs(prop_sums$proportion - 1) < 1e-6)
-
-  cat(
-    "Validation: Proportions sum to 1 for each length:",
-    if (all_sum_to_one) "✓ PASS" else "✗ FAIL", "\n"
-  )
-}
-
-#' Plot Age-Length Key
-#'
-#' Creates a heatmap visualization of the age-length key showing
-#' the probability distribution of ages for each length.
-#'
-#' @param alk Age-length key data frame
-#' @param title Character, plot title (optional)
-#' @param ... Additional arguments (not used)
-#'
-#' @return ggplot2 object
-#' @export
-#' @importFrom ggplot2 ggplot aes geom_tile scale_fill_viridis_c labs theme_minimal
-#' @importFrom rlang .data
-plot_age_length_key <- function(alk, title = "Age-Length Key", ...) {
-  # Check if ggplot2 is available
-  if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    stop("ggplot2 is required for plotting. Install with: install.packages('ggplot2')")
-  }
-
-  p <- ggplot2::ggplot(alk, ggplot2::aes(x = .data$length, y = .data$age, fill = .data$proportion)) +
-    ggplot2::geom_tile() +
-    ggplot2::scale_fill_viridis_c(name = "Proportion") +
-    ggplot2::labs(
-      x = "Length",
-      y = "Age",
-      title = title,
-      subtitle = "Heatmap showing probability of age given length"
-    ) +
-    ggplot2::theme_minimal()
-
-  return(p)
-}

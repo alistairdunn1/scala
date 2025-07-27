@@ -20,7 +20,7 @@
 #' - Weighted mean CVs across length classes (for bootstrap results only)
 #'
 #' The weighted mean CV is calculated as the composition-weighted average CV across length classes:
-#' Weighted Mean CV = Sum(CV_i × N_i) / Sum(N_i), where CV_i is the coefficient of variation
+#' Weighted Mean CV = Sum(CV_i * N_i) / Sum(N_i), where CV_i is the coefficient of variation
 #' and N_i is the number of fish for length class i.
 #'
 #' @examples

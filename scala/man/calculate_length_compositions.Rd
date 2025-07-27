@@ -14,7 +14,8 @@ calculate_length_compositions(
   bootstraps = 0,
   plus_group = FALSE,
   minus_group = FALSE,
-  return_full_bootstraps = FALSE
+  return_full_bootstraps = FALSE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ calculate_length_compositions(
 \item{minus_group}{Logical, combine lengths <= min length into a minus group (default FALSE)}
 
 \item{return_full_bootstraps}{Logical, whether to return all individual bootstrap results along with summaries (default FALSE)}
+
+\item{verbose}{Logical, whether to print progress messages (default TRUE)}
 }
 \value{
 When bootstraps > 0: List containing:

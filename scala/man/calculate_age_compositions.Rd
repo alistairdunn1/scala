@@ -9,13 +9,18 @@ calculate_age_compositions(
   age_length_key,
   age_range = NULL,
   plus_group_age = FALSE,
-  minus_group_age = FALSE
+  minus_group_age = FALSE,
+  verbose = TRUE
 )
 }
 \arguments{
 \item{x}{A length_composition object from calculate_length_compositions()}
 
-\item{age_length_key}{Data frame with columns: length, age, and proportion.
+\item{age_length_key}{Either:
+\itemize{
+  \item A single data frame with columns: length, age, and proportion (applied to all sex categories)
+  \item A named list with elements: male, female, unsexed (each a data frame with length, age, proportion)
+}
 Each length should have proportions summing to 1 across ages.}
 
 \item{age_range}{Numeric vector of min and max ages to include (e.g., c(1, 10))}
@@ -23,6 +28,8 @@ Each length should have proportions summing to 1 across ages.}
 \item{plus_group_age}{Logical, combine ages >= max age into a plus group (default FALSE)}
 
 \item{minus_group_age}{Logical, combine ages <= min age into a minus group (default FALSE)}
+
+\item{verbose}{Logical, whether to print progress messages (default TRUE)}
 }
 \value{
 List containing:
@@ -50,13 +57,15 @@ List containing:
     \item \code{minus_group_age}: Minus group setting for ages
     \item \code{has_sex_data}: TRUE (indicates sex-specific analysis)
     \item \code{scaling_type}: Type of scaling applied
-    \item \code{age_length_key}: The age-length key used in calculations
+    \item \code{age_length_key}: The age-length key(s) used in calculations
+    \item \code{sex_specific_keys}: Logical indicating whether sex-specific keys were used
   }
 }
 \description{
 Converts length compositions to age compositions by applying age-length keys.
 Propagates uncertainty from bootstrap length composition estimates through
 the age-length transformation to provide age composition CVs and confidence intervals.
+Supports sex-specific age-length keys for improved biological realism.
 }
 \details{
 The function applies age-length keys to convert length compositions to age compositions.
@@ -68,15 +77,26 @@ age-length key. This process is applied to:
 3. **Confidence intervals**: Empirical 95% CIs from bootstrap distribution
 4. **Coefficients of variation**: Bootstrap-based CV estimates
 
-**Age-length key requirements:**
-- Must contain columns: length, age, proportion
+**Age-length key formats:**
+
+*Single key (applied to all sexes):*
+- Data frame with columns: length, age, proportion
 - Proportions for each length must sum to 1 across ages
+
+*Sex-specific keys:*
+- Named list with elements: male, female, unsexed
+- Each element is a data frame with columns: length, age, proportion
+- Allows for sex-specific growth patterns and maturation
+- If unsexed fish are present but no unsexed key provided, male key is used
+
+**Requirements:**
 - Should cover all length bins present in the length composition data
 - Missing length-age combinations are assumed to have proportion = 0
+- Proportions for each length must sum to 1 across ages (within each sex)
 
 **Bootstrap uncertainty propagation:**
 Each bootstrap iteration of length compositions is converted to age compositions
-using the same age-length key, preserving the correlation structure and
+using the same age-length key(s), preserving the correlation structure and
 providing realistic uncertainty estimates for the age compositions.
 }
 \examples{
@@ -93,28 +113,59 @@ lc_result <- calculate_length_compositions(
   bootstraps = 100
 )
 
-# Create sample age-length key
-age_key <- expand.grid(length = 20:40, age = 1:8)
-age_key$proportion <- with(age_key, {
-  # Simple relationship: younger fish at smaller lengths
-  dnorm(age, mean = (length - 15) / 3, sd = 2)
-})
-# Normalize proportions within each length
-age_key <- age_key \%>\%
-  group_by(length) \%>\%
-  mutate(proportion = proportion / sum(proportion)) \%>\%
-  ungroup()
+# Example 1: Single age-length key (applied to all sexes)
+age_key <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 8),
+  growth_type = "vonbert"
+)
 
-# Calculate age compositions
 age_result <- calculate_age_compositions(
   x = lc_result,
   age_length_key = age_key,
   age_range = c(1, 8)
 )
 
-# View results
-print(age_result)
-plot(age_result)
+# Example 2: Sex-specific age-length keys
+# Males mature faster (younger at given length)
+male_key <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 8),
+  growth_type = "vonbert",
+  growth_params = list(linf = 35, k = 0.35, t0 = -0.5)
+)
+
+# Females grow larger/older
+female_key <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 8),
+  growth_type = "vonbert",
+  growth_params = list(linf = 40, k = 0.25, t0 = -0.8)
+)
+
+# Unsexed fish use intermediate growth
+unsexed_key <- generate_age_length_key(
+  length_range = c(20, 40),
+  age_range = c(1, 8),
+  growth_type = "vonbert",
+  growth_params = list(linf = 37, k = 0.30, t0 = -0.6)
+)
+
+sex_specific_keys <- list(
+  male = male_key,
+  female = female_key,
+  unsexed = unsexed_key
+)
+
+age_result_sex <- calculate_age_compositions(
+  x = lc_result,
+  age_length_key = sex_specific_keys,
+  age_range = c(1, 8)
+)
+
+# View and plot results
+print(age_result_sex)
+plot(age_result_sex)
 }
 
 }

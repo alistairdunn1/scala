@@ -51,7 +51,7 @@ plot.length_composition <- function(x,
     if (is.null(bin_size)) {
       return(list(data = data_array, lengths = lengths_vec))
     }
-    
+
     # Check if lengths_vec is valid
     if (length(lengths_vec) == 0 || all(is.na(lengths_vec))) {
       warning("No valid length data available for binning")
@@ -61,12 +61,12 @@ plot.length_composition <- function(x,
     # Create length bins
     min_length <- min(lengths_vec, na.rm = TRUE)
     max_length <- max(lengths_vec, na.rm = TRUE)
-    
+
     if (!is.finite(min_length) || !is.finite(max_length)) {
       warning("Invalid length range for binning")
       return(list(data = data_array, lengths = lengths_vec))
     }
-    
+
     bin_breaks <- seq(from = min_length, to = max_length + bin_size, by = bin_size)
     bin_centers <- bin_breaks[-length(bin_breaks)] + bin_size / 2
 
@@ -166,7 +166,7 @@ plot.length_composition <- function(x,
         sex_data <- data.frame(
           length_bin = lengths_vec,
           composition = comp_data[, sex_name],
-          sex = tools::toTitleCase(as.character(sex_name)),  # Capitalize sex labels
+          sex = tools::toTitleCase(as.character(sex_name)), # Capitalize sex labels
           stringsAsFactors = FALSE
         )
 
@@ -237,7 +237,7 @@ plot.length_composition <- function(x,
     all_sex_categories <- dimnames(comp_data)[[2]]
     # Filter out non-sex categories like "composition"
     valid_sex_categories <- all_sex_categories[all_sex_categories %in% c("male", "female", "unsexed", "total")]
-    
+
     sex_categories <- if (unsexed) {
       valid_sex_categories
     } else {
@@ -248,10 +248,10 @@ plot.length_composition <- function(x,
     # Convert 3D array to long format data frame
     length_bins <- as.numeric(dimnames(comp_data)[[1]])
     strata <- dimnames(comp_data)[[3]]
-    
+
     # Create properly structured data frame
     plot_data <- data.frame()
-    
+
     for (stratum in strata) {
       for (sex in sex_categories) {
         for (i in seq_along(length_bins)) {
@@ -263,7 +263,7 @@ plot.length_composition <- function(x,
             stratum = stratum,
             stringsAsFactors = FALSE
           )
-          
+
           # Add confidence intervals if available - use proper indexing
           if (!is.null(ci_lower) && !is.null(ci_upper)) {
             # Check if indices are valid for CI arrays
@@ -276,12 +276,12 @@ plot.length_composition <- function(x,
               row_data$ci_upper <- NA
             }
           }
-          
+
           plot_data <- rbind(plot_data, row_data)
         }
       }
     }
-    
+
     # Capitalize sex and stratum labels for better presentation
     plot_data$sex <- tools::toTitleCase(as.character(plot_data$sex))
     plot_data$stratum <- tools::toTitleCase(as.character(plot_data$stratum))

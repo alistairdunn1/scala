@@ -208,7 +208,7 @@ The package provides the following main functions:
 - **`plot.length_composition()`**: Create professional visualizations with lines and uncertainty ribbons (requires ggplot2)
 - **`plot.age_composition()`**: Visualize age compositions with uncertainty ribbons
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
-- **`plot_age_length_key()`**: Visualize age-length keys as heatmaps
+- **`plot_alk()`**: Visualize age-length keys as heatmaps
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
 
 ### Enhanced Plotting Features
@@ -1014,7 +1014,7 @@ age_key <- generate_age_length_key(
 )
 
 # Visualize the age-length key
-plot_age_length_key(age_key)
+plot_alk(age_key)
 
 # Convert length compositions to age compositions
 age_results <- calculate_age_compositions(

@@ -20,7 +20,7 @@ providing abundance (count) calculations instead of weight-based scaling.
 }
 \details{
 This function returns parameters where a=1 and b=0 for all sex categories,
-which results in the length-weight relationship: Weight = 1 × Length^0 = 1.
+which results in the length-weight relationship: Weight = 1 * Length^0 = 1.
 This effectively provides a constant weight of 1 for all fish regardless of length,
 making the scaling process abundance-based rather than biomass-based.
 
