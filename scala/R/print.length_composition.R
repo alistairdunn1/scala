@@ -16,6 +16,7 @@
 #' - Stratum-specific length composition results if multiple strata are present
 #' - Summary statistics for total, male, female, and unsexed fish
 #' - CV columns if \code{show_cvs = TRUE} and uncertainty estimates are available
+#' - Confidence interval columns (CI_Lower and CI_Upper) for each sex category when bootstrap results are available
 #' - Weighted mean CVs across length classes (for bootstrap results only)
 #'
 #' The weighted mean CV is calculated as the composition-weighted average CV across length classes:
@@ -75,6 +76,24 @@ print.length_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digi
         pooled_df$CV_Male <- round(x$pooled_lc_cv[has_fish, "male"] * 100, 1)
         pooled_df$CV_Female <- round(x$pooled_lc_cv[has_fish, "female"] * 100, 1)
         pooled_df$CV_Total <- round(x$pooled_lc_cv[has_fish, "total"] * 100, 1)
+
+        # Add confidence intervals if available
+        if (!is.null(x$pooled_lc_ci_lower) && !is.null(x$pooled_lc_ci_upper)) {
+          pooled_df$CI_Lower_Male <- round(x$pooled_lc_ci_lower[has_fish, "male"], digits)
+          pooled_df$CI_Upper_Male <- round(x$pooled_lc_ci_upper[has_fish, "male"], digits)
+          pooled_df$CI_Lower_Female <- round(x$pooled_lc_ci_lower[has_fish, "female"], digits)
+          pooled_df$CI_Upper_Female <- round(x$pooled_lc_ci_upper[has_fish, "female"], digits)
+          pooled_df$CI_Lower_Total <- round(x$pooled_lc_ci_lower[has_fish, "total"], digits)
+          pooled_df$CI_Upper_Total <- round(x$pooled_lc_ci_upper[has_fish, "total"], digits)
+        }
+      } else if (!is.null(x$pooled_lc_ci_lower) && !is.null(x$pooled_lc_ci_upper)) {
+        # Add confidence intervals even if CVs are not shown
+        pooled_df$CI_Lower_Male <- round(x$pooled_lc_ci_lower[has_fish, "male"], digits)
+        pooled_df$CI_Upper_Male <- round(x$pooled_lc_ci_upper[has_fish, "male"], digits)
+        pooled_df$CI_Lower_Female <- round(x$pooled_lc_ci_lower[has_fish, "female"], digits)
+        pooled_df$CI_Upper_Female <- round(x$pooled_lc_ci_upper[has_fish, "female"], digits)
+        pooled_df$CI_Lower_Total <- round(x$pooled_lc_ci_lower[has_fish, "total"], digits)
+        pooled_df$CI_Upper_Total <- round(x$pooled_lc_ci_upper[has_fish, "total"], digits)
       }
 
       print(pooled_df)
@@ -101,7 +120,6 @@ print.length_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digi
         # Calculate weighted mean CVs for each sex category
         weights_male <- x$pooled_length_composition[, "male"]
         weights_female <- x$pooled_length_composition[, "female"]
-        weights_unsexed <- x$pooled_length_composition[, "unsexed"]
         weights_total <- x$pooled_length_composition[, "total"]
 
         wmean_cv_male <- calc_weighted_mean_cv(x$pooled_lc_cv[, "male"], weights_male)
@@ -195,6 +213,24 @@ print.length_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digi
 
           if (show_cvs && !is.null(x$lc_cvs)) {
             stratum_df$CV_Total <- round(x$lc_cvs[stratum_has_fish, "total", i] * 100, 1)
+
+            # Add confidence intervals for stratum if available
+            if (!is.null(x$lc_ci_lower) && !is.null(x$lc_ci_upper)) {
+              stratum_df$CI_Lower_Male <- round(x$lc_ci_lower[stratum_has_fish, "male", i], digits)
+              stratum_df$CI_Upper_Male <- round(x$lc_ci_upper[stratum_has_fish, "male", i], digits)
+              stratum_df$CI_Lower_Female <- round(x$lc_ci_lower[stratum_has_fish, "female", i], digits)
+              stratum_df$CI_Upper_Female <- round(x$lc_ci_upper[stratum_has_fish, "female", i], digits)
+              stratum_df$CI_Lower_Total <- round(x$lc_ci_lower[stratum_has_fish, "total", i], digits)
+              stratum_df$CI_Upper_Total <- round(x$lc_ci_upper[stratum_has_fish, "total", i], digits)
+            }
+          } else if (!is.null(x$lc_ci_lower) && !is.null(x$lc_ci_upper) && is_bootstrap) {
+            # Add confidence intervals even if CVs are not shown
+            stratum_df$CI_Lower_Male <- round(x$lc_ci_lower[stratum_has_fish, "male", i], digits)
+            stratum_df$CI_Upper_Male <- round(x$lc_ci_upper[stratum_has_fish, "male", i], digits)
+            stratum_df$CI_Lower_Female <- round(x$lc_ci_lower[stratum_has_fish, "female", i], digits)
+            stratum_df$CI_Upper_Female <- round(x$lc_ci_upper[stratum_has_fish, "female", i], digits)
+            stratum_df$CI_Lower_Total <- round(x$lc_ci_lower[stratum_has_fish, "total", i], digits)
+            stratum_df$CI_Upper_Total <- round(x$lc_ci_upper[stratum_has_fish, "total", i], digits)
           }
 
           print(stratum_df)

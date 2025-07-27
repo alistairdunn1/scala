@@ -1,10 +1,10 @@
-citHeader("To cite CAA in publications, use:")
+citHeader("To cite scala in publications, use:")
 
 citEntry(
   entry = "Manual",
-  title = "CAA: Calculate scaled catch and length and age compositions",
+  title = "scala: Calculate scaled catch and length and age compositions",
   author = person("Alistair", "Dunn", email = "alistair.dunn@OceanEnvironmental.co.nz", role = c("aut", "cre")),
   year = "2025",
   note = "R package version 0.1",
-  url = "https://github.com/alistairdunn1/CAA"
+  url = "https://github.com/alistairdunn1/scala"
 )

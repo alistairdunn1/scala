@@ -45,8 +45,24 @@
 #'     \item plus_group: logical, plus group used
 #'     \item minus_group: logical, minus group used
 #'     \item has_sex_data: logical, TRUE if sex-based columns present
+#'     \item scaling_type: character, type of scaling used ("weight" or "density")
+#'     \item summary_stats: list containing pre-computed summary statistics with components:
+#'       \itemize{
+#'         \item total_summary: list with n_fish (named vector of fish counts by sex) and n_hauls (total number of hauls)
+#'         \item stratum_summary: named list by stratum, each containing n_fish and n_hauls for that stratum
+#'       }
 #'   }
-#'   When bootstraps = 0: 3D array (length x sex x stratum) of scaled length compositions only
+#'   When bootstraps = 0: List containing:
+#'   \itemize{
+#'     \item \code{length_compositions}: 3D array (length x sex x stratum) of scaled length compositions
+#'     \item \code{lengths}: Vector of length bin centers
+#'     \item \code{strata_names}: Vector of stratum names
+#'     \item \code{n_bootstraps}: 0 (no bootstraps performed)
+#'     \item \code{plus_group}: Plus group setting
+#'     \item \code{minus_group}: Minus group setting
+#'     \item \code{has_sex_data}: TRUE (indicates sex-specific analysis)
+#'     \item \code{scaling_type}: Type of scaling applied
+#'   }
 #'
 #' @details
 #' The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length composition and proportion estimates.
@@ -390,6 +406,55 @@ calculate_length_compositions <- function(fish_data,
     pooled_prop_cv <- NA
   }
 
+  # Calculate summary statistics for get_summary function
+  calculate_summary_stats <- function(fish_data, strata_data) {
+    # Overall summary (pooled across all strata)
+    total_fish_by_sex <- c(
+      male = sum(fish_data$male, na.rm = TRUE),
+      female = sum(fish_data$female, na.rm = TRUE),
+      unsexed = sum(fish_data$unsexed, na.rm = TRUE)
+    )
+    total_fish_by_sex["total"] <- sum(total_fish_by_sex)
+    total_hauls <- length(unique(fish_data$sample_id))
+
+    # By-stratum summary
+    stratum_summary <- list()
+    for (stratum_name in strata_names) {
+      stratum_fish <- fish_data[fish_data$stratum == stratum_name, ]
+      if (nrow(stratum_fish) > 0) {
+        stratum_fish_by_sex <- c(
+          male = sum(stratum_fish$male, na.rm = TRUE),
+          female = sum(stratum_fish$female, na.rm = TRUE),
+          unsexed = sum(stratum_fish$unsexed, na.rm = TRUE)
+        )
+        stratum_fish_by_sex["total"] <- sum(stratum_fish_by_sex)
+        stratum_hauls <- length(unique(stratum_fish$sample_id))
+
+        stratum_summary[[stratum_name]] <- list(
+          n_fish = stratum_fish_by_sex,
+          n_hauls = stratum_hauls
+        )
+      } else {
+        # Handle empty strata
+        stratum_summary[[stratum_name]] <- list(
+          n_fish = c(male = 0, female = 0, unsexed = 0, total = 0),
+          n_hauls = 0
+        )
+      }
+    }
+
+    return(list(
+      total_summary = list(
+        n_fish = total_fish_by_sex,
+        n_hauls = total_hauls
+      ),
+      stratum_summary = stratum_summary
+    ))
+  }
+
+  # Calculate summary statistics
+  summary_stats <- calculate_summary_stats(fish_data, strata_data)
+
   # Format results
   results <- list(
     # Main results
@@ -424,7 +489,10 @@ calculate_length_compositions <- function(fish_data,
     plus_group = plus_group,
     minus_group = minus_group,
     has_sex_data = TRUE,
-    scaling_type = scaling_type
+    scaling_type = scaling_type,
+
+    # Summary statistics for get_summary function
+    summary_stats = summary_stats
   )
 
   # Add full bootstrap results if requested

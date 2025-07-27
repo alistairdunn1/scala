@@ -49,7 +49,7 @@ Supports both **commercial fisheries** (weight-based scaling) and **research sur
 install.packages(c("roxygen2", "devtools"))
 
 # Build and install the package
-devtools::install(".")
+devtools::install("alistairdunn1/scala", subdir = "scala")
 
 # Or using R CMD (from command line)
 R CMD build scala
@@ -114,11 +114,11 @@ print(results)
 
 # Create publication-quality plots with lines and uncertainty ribbons
 if (requireNamespace("ggplot2", quietly = TRUE)) {
-  # Pooled plot with uncertainty ribbons
-  plot(results, plot_type = "pooled", show_uncertainty = TRUE)
+  # Pooled plot with confidence interval ribbons
+  plot(results, by_stratum = FALSE, show_CIs = TRUE)
   
   # Faceted plot: rows=strata, columns=sex categories
-  plot(results, plot_type = "by_stratum", show_uncertainty = TRUE)
+  plot(results, by_stratum = TRUE, show_CIs = TRUE)
 }
 ```
 
@@ -200,7 +200,11 @@ The package provides the following main functions:
 - **`generate_commercial_test_data()`**: Generate commercial fisheries test data
 - **`generate_survey_test_data()`**: Generate research survey test data
 - **`get_default_lw_params()`**: Get default length-weight parameters for testing
+- **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
+- **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from proportions and CVs
+- **`calculate_all_multinomial_n()`**: Calculate effective sample sizes for all stratum/sex combinations
 - **`plot.length_composition()`**: Create professional visualizations with lines and uncertainty ribbons (requires ggplot2)
+- **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
 
 ### Enhanced Plotting Features
@@ -209,7 +213,22 @@ The plotting system now includes:
 - **Line plots** with uncertainty ribbons instead of traditional bar charts
 - **Faceted layouts** for multi-stratum, multi-sex visualization
 - **Bootstrap uncertainty** visualization as shaded confidence regions
-- **Customizable themes** and color schemes for publication-quality figures
+- **Comparison plotting** for side-by-side analysis of multiple scenarios
+- **Length binning** for aggregated visualization at coarser scales
+- **Sex category filtering** with optional inclusion of unsexed fish
+
+### Multinomial Effective Sample Size
+
+New functionality for calculating multinomial effective sample sizes:
+- **Individual calculations** for specific stratum and sex combinations
+- **Batch processing** for all combinations simultaneously
+- **Robust fitting** with outlier detection and removal options
+- **Quality diagnostics** including model fit statistics
+
+This is particularly useful for:
+- Stock assessment applications requiring effective sample sizes
+- Data weighting in integrated models
+- Quality control of length composition data
 
 For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_length_compositions`).
 
@@ -299,13 +318,6 @@ print(result)
 
 The package includes professional plotting capabilities to visualize scaled length composition results using **lines with uncertainty ribbons**:
 
-### Enhanced Plotting Features
-
-- **Line plots** with uncertainty ribbons (replacing traditional bar charts)
-- **Faceted layouts** for by-stratum visualization (rows = strata, columns = sex categories)
-- **Bootstrap uncertainty** displayed as shaded ribbons (±1 standard error)
-- **Customizable appearance** with color themes and plot options
-
 ### Basic Plotting
 
 ```r
@@ -314,61 +326,105 @@ if (!requireNamespace("ggplot2", quietly = TRUE)) {
   install.packages("ggplot2")
 }
 
-# Plot pooled results across all strata (lines with uncertainty ribbons)
-plot(result, plot_type = "pooled", show_uncertainty = TRUE)
+# Plot pooled results across all strata (lines with confidence intervals)
+plot(result, by_stratum = FALSE, show_CIs = TRUE)
 
 # Plot results by stratum (faceted layout: rows=strata, columns=sex categories)
-plot(result, plot_type = "by_stratum", show_uncertainty = TRUE)
+plot(result, by_stratum = TRUE, show_CIs = TRUE)
 
 # Show proportions instead of absolute compositions
-plot(result, plot_type = "pooled", y_axis = "proportion")
+plot(result, by_stratum = FALSE, type = "proportion")
 
-# Customize plot appearance with ocean theme
-ocean_colors <- c("male" = "#004466", "female" = "#006699", 
-                  "unsexed" = "#0099CC", "pooled" = "#FF6600")
-plot(result, 
-     plot_type = "pooled",
-     sex_colors = ocean_colors,
-     title = "Length Distribution by Sex",
-     show_uncertainty = TRUE)
+# Hide confidence intervals
+plot(result, by_stratum = FALSE, show_CIs = FALSE)
+
+# Use partial matching for convenience
+plot(result, type = "prop")  # equivalent to type = "proportion"
+
+# Aggregate length data into larger bins for summarized view
+plot(result, length_bin_size = 2)   # 2 cm bins
+plot(result, length_bin_size = 5)   # 5 cm bins
+
+# Include or exclude unsexed fish category
+plot(result, unsexed = FALSE)  # Default: exclude unsexed category
+plot(result, unsexed = TRUE)   # Include unsexed category
 ```
 
 ### Advanced Visualization Options
 
 ```r
-# By-stratum faceted plot with custom layout
-# Rows represent different strata (e.g., "Coastal", "Offshore")  
-# Columns represent sex categories (Male, Female, Unsexed, Pooled)
+# By-stratum faceted plot with confidence intervals
+# Rows represent different strata (e.g., "North", "South")  
+# Columns represent sex categories (Male, Female, Unsexed, Total)
 plot(result, 
-     plot_type = "by_stratum",
-     show_uncertainty = TRUE,
-     title = "Length Composition by Sex and Stratum")
+     by_stratum = TRUE,
+     show_CIs = TRUE,
+     type = "composition")
 
 # Proportional view for comparing distribution shapes
 plot(result, 
-     plot_type = "by_stratum", 
-     y_axis = "proportion",
-     title = "Relative Length Composition Patterns")
+     by_stratum = TRUE, 
+     type = "proportion",
+     show_CIs = TRUE)
+
+# Combine binning with other options for simplified views
+plot(result, 
+     by_stratum = TRUE,
+     length_bin_size = 5,
+     type = "proportion")
+
+# Include unsexed category with other options
+plot(result, 
+     by_stratum = TRUE,
+     unsexed = TRUE,
+     show_CIs = TRUE)
+
+# Clean plot without confidence intervals for publication
+plot(result, 
+     by_stratum = FALSE,
+     show_CIs = FALSE, 
+     type = "proportion")
 ```
 
 ### Plot Options
 
-- **`plot_type`**: 
-  - `"pooled"` - Combined across strata with separate lines for each sex
-  - `"by_stratum"` - Faceted layout (rows = strata, columns = sex categories)
-- **`y_axis`**: 
+- **`by_stratum`**: 
+  - `FALSE` - Pooled across strata with separate lines for each sex
+  - `TRUE` - Faceted layout (rows = strata, columns = sex categories)
+- **`type`**: 
   - `"composition"` - Absolute scaled compositions (number of fish)
   - `"proportion"` - Relative proportions (0-1 scale)
-- **`show_uncertainty`**: 
-  - `TRUE` - Show uncertainty ribbons based on bootstrap CV estimates
-  - `FALSE` - Show only the mean length composition lines
-- **`sex_colors`**: Named vector to customize colors for sex categories (`"male"`, `"female"`, `"unsexed"`, `"pooled"`)
-- **`title`**: Custom plot title
+- **`show_CIs`**: 
+  - `TRUE` - Display bootstrap confidence interval ribbons (95% CI)
+  - `FALSE` - Show only the point estimates (lines without ribbons)
+- **`length_bin_size`**: 
+  - `NULL` (default) - Use original 1 cm length bins
+  - Numeric value (e.g., 2, 5, 10) - Aggregate data into larger length bins (cm)
+- **`unsexed`**: 
+  - `FALSE` (default) - Exclude unsexed fish category from plots
+  - `TRUE` - Include unsexed fish category alongside male, female, and total
+
+### Length Binning Features
+
+The **length binning** feature allows aggregation of fine-scale length data into larger, more manageable bins:
+
+- **Flexible bin sizes**: Choose any bin size (e.g., 2 cm, 5 cm, 10 cm)
+- **Automatic aggregation**: Compositions and confidence intervals are properly summed across length bins
+- **Cleaner visualization**: Reduces noise in data visualization for broader pattern analysis
+- **Compatible with all options**: Works with both pooled and by-stratum plots, confidence intervals, and proportion scaling
+
+The enhanced plotting system generates **line plots with confidence interval ribbons** when bootstrap results are available, providing a clear and professional visualization of uncertainty in the scaled length compositions.
+
+**Key Parameter Updates:**
+- `by_stratum`: Logical (TRUE/FALSE) for faceted by-stratum display
+- `show_CIs`: Display bootstrap confidence interval ribbons (replaces `show_uncertainty`)
+- `type`: "composition" (default) or "proportion" for y-axis scaling
+- Removed deprecated parameters: `plot_type`, `sex_colors`, `y_axis` 
 
 ### Visualization Features
 
 - **Lines**: Clean representation of length composition trends
-- **Uncertainty ribbons**: Shaded areas showing ±1 standard error from bootstrap estimates
+- **Confidence interval ribbons**: Shaded areas showing 95% bootstrap confidence intervals
 - **Faceted layout**: Professional multi-panel display for comparing strata and sex categories
 - **Color customization**: Flexible theming options for publication-quality figures
 
@@ -397,28 +453,239 @@ result <- calculate_length_compositions(
 # Create comprehensive visualizations
 library(ggplot2)
 
-# 1. Pooled results with uncertainty ribbons
+# 1. Pooled results with confidence interval ribbons
 pooled_plot <- plot(result, 
-                    plot_type = "pooled", 
-                    show_uncertainty = TRUE,
-                    title = "Length Composition by Sex (All Strata Combined)")
+                    by_stratum = FALSE, 
+                    show_CIs = TRUE)
 
 # 2. Faceted by-stratum plot showing all sex×stratum combinations
 faceted_plot <- plot(result, 
-                     plot_type = "by_stratum", 
-                     show_uncertainty = TRUE,
-                     title = "Length Composition by Sex and Stratum")
+                     by_stratum = TRUE, 
+                     show_CIs = TRUE)
 
 # 3. Proportional comparison for pattern analysis
 proportion_plot <- plot(result, 
-                        plot_type = "by_stratum", 
-                        y_axis = "proportion",
-                        title = "Relative Length Distribution Patterns")
+                        by_stratum = TRUE, 
+                        type = "proportion")
+
+# 4. 5cm length binning for simplified view
+binned_plot <- plot(result,
+                    length_bin_size = 5,
+                    show_CIs = TRUE)
 
 # Display plots
 print(pooled_plot)
 print(faceted_plot) 
 print(proportion_plot)
+print(binned_plot)
+```
+
+## Comparison Plotting
+
+The `plot_length_composition_comparison()` function allows for side-by-side comparison of multiple length composition results in a multi-panel layout.
+
+### Function Signature
+
+```r
+plot_length_composition_comparison(
+  x,                    # List of length_composition objects
+  by_stratum = FALSE,   # Use pooled (FALSE) or by-stratum (TRUE) data
+  stratum = NULL,       # Specific stratum name for by-stratum plots
+  type = "composition", # "composition" or "proportion"
+  length_bin_size = NULL, # Optional length binning (e.g., 2, 5, 10)
+  unsexed = FALSE,      # Include unsexed category
+  show_CIs = TRUE       # Show confidence intervals
+)
+```
+
+### Basic Comparison Usage
+
+```r
+# Calculate length compositions for different scenarios
+commercial_result <- calculate_length_compositions(...)
+survey_result <- calculate_length_compositions(...)
+
+# Create comparison plots
+results_list <- list(
+  "Commercial" = commercial_result,
+  "Survey" = survey_result
+)
+
+# Basic comparison (pooled across strata)
+comparison_plot <- plot_length_composition_comparison(results_list)
+
+# Comparison including unsexed fish
+comparison_with_unsexed <- plot_length_composition_comparison(
+  results_list, 
+  unsexed = TRUE
+)
+
+# Comparison with 5cm length binning
+binned_comparison <- plot_length_composition_comparison(
+  results_list,
+  length_bin_size = 5,
+  type = "proportion"
+)
+
+# By-stratum comparison for first available stratum
+stratum_comparison <- plot_length_composition_comparison(
+  results_list,
+  by_stratum = TRUE
+)
+
+# Specific stratum comparison
+specific_stratum <- plot_length_composition_comparison(
+  results_list,
+  by_stratum = TRUE,
+  stratum = "North"
+)
+```
+
+### Comparison Layout
+
+The comparison plots use a **multi-panel layout**:
+- **Rows**: Each element from the input list (e.g., different scenarios/datasets)
+- **Columns**: Sex categories (Male, Female, Total, and optionally Unsexed)
+- **Shared scales**: Consistent x and y axes across all panels for easy comparison
+
+### Advanced Comparison Features
+
+- **Named scenarios**: Use named lists for better plot labels
+- **Length binning**: Apply consistent binning across all scenarios
+- **Sex filtering**: Include/exclude unsexed category across all scenarios
+- **Confidence intervals**: Show uncertainty consistently across comparisons
+- **Flexible data**: Mix pooled and by-stratum data as needed
+
+```r
+# Advanced comparison example
+advanced_comparison <- plot_length_composition_comparison(
+  list(
+    "Scenario A" = result_a,
+    "Scenario B" = result_b,  
+    "Scenario C" = result_c
+  ),
+  type = "proportion",
+  length_bin_size = 5,
+  unsexed = TRUE,
+  show_CIs = TRUE
+)
+```
+
+## Uncertainty Analysis
+
+### Summary Statistics
+
+The `get_summary()` function provides comprehensive summary statistics from length composition results, including mean weighted coefficient of variation (CV), number of fish sampled by sex category, and total number of hauls sampled.
+
+#### Function Signature
+
+```r
+get_summary(
+  x,                    # length_composition object
+  by_stratum = FALSE,   # Use pooled (FALSE) or by-stratum (TRUE) data
+  type = "composition", # "composition" or "proportion"
+  sex = c("male", "female", "total"), # Sex categories to include
+  stratum = NULL,       # Specific stratum for by-stratum analysis
+  length_range = NULL   # Length range c(min, max) to include
+)
+```
+
+#### Return Structure
+
+The function returns a list containing:
+- **`mean_weighted_cv`**: Mean weighted coefficient of variation
+- **`n_fish`**: Number of fish sampled by sex category (for pooled data)
+- **`total_fish`**: Total number of fish sampled
+- **`n_hauls`**: Total number of hauls/samples
+- **`fish_haul_summary`**: Detailed breakdown by stratum (for by-stratum data)
+
+#### Basic Summary Usage
+
+```r
+# Calculate length compositions with bootstrap uncertainty
+result <- calculate_length_compositions(
+  fish_data = test_data$fish_data,
+  strata_data = test_data$strata_data,
+  bootstraps = 300
+)
+
+# Basic summary statistics (pooled across strata)
+summary_stats <- get_summary(result)
+print(summary_stats$mean_weighted_cv)  # Overall uncertainty
+print(summary_stats$total_fish)        # Total fish count
+print(summary_stats$n_hauls)           # Number of hauls
+
+# Summary by sex category
+summary_by_sex <- get_summary(result, sex = c("male", "female", "total"))
+print(summary_by_sex$n_fish)  # Fish counts by sex
+
+# Summary for proportions instead of absolute compositions
+summary_proportions <- get_summary(result, type = "proportion")
+
+# Summary by stratum
+summary_by_stratum <- get_summary(result, by_stratum = TRUE)
+print(summary_by_stratum$fish_haul_summary)  # Detailed stratum breakdown
+
+# Summary for specific length range
+summary_length_range <- get_summary(result, length_range = c(30, 50))
+
+# Summary for specific stratum and sex
+summary_specific <- get_summary(
+  result, 
+  by_stratum = TRUE, 
+  stratum = "North", 
+  sex = "total"
+)
+```
+
+#### CV Interpretation
+
+The weighted CV is calculated as:
+$$CV_{weighted} = \frac{\sum_{i} w_i \times CV_i}{\sum_{i} w_i}$$
+
+where $w_i$ are the composition values (weights) and $CV_i$ are the coefficient of variation values at each length bin.
+
+**Typical CV ranges:**
+- **CV < 0.20**: Low uncertainty, high precision
+- **CV 0.20-0.40**: Moderate uncertainty
+- **CV > 0.40**: High uncertainty, results should be interpreted with caution
+
+#### Advanced Summary Analysis
+
+```r
+# Compare uncertainty and sample sizes across different scenarios
+commercial_summary <- get_summary(commercial_result)
+survey_summary <- get_summary(survey_result)
+
+print("Commercial fisheries:")
+print(paste("CV:", round(commercial_summary$mean_weighted_cv, 3)))
+print(paste("Fish:", commercial_summary$total_fish))
+print(paste("Hauls:", commercial_summary$n_hauls))
+
+print("Research survey:")
+print(paste("CV:", round(survey_summary$mean_weighted_cv, 3)))
+print(paste("Fish:", survey_summary$total_fish))
+print(paste("Hauls:", survey_summary$n_hauls))
+
+# Stratum-specific uncertainty and sample size assessment
+stratum_summary <- get_summary(result, by_stratum = TRUE)
+for (stratum in names(stratum_summary$fish_haul_summary)) {
+  cv_val <- stratum_summary$mean_weighted_cv[stratum, "total"]
+  fish_count <- stratum_summary$fish_haul_summary[[stratum]]$total_fish
+  haul_count <- stratum_summary$fish_haul_summary[[stratum]]$n_hauls
+  
+  print(paste(stratum, "- CV:", round(cv_val, 3), 
+              "Fish:", fish_count, "Hauls:", haul_count))
+}
+
+# Length-specific uncertainty patterns with sample information
+early_summary <- get_summary(result, length_range = c(25, 40))
+late_summary <- get_summary(result, length_range = c(40, 60))
+
+print(paste("Early lengths - CV:", round(early_summary$mean_weighted_cv, 3),
+            "Fish:", early_summary$total_fish))
+print(paste("Late lengths - CV:", round(late_summary$mean_weighted_cv, 3),
+            "Fish:", late_summary$total_fish))
 ```
 
 ### Density-Based Example (Research Surveys)
@@ -686,6 +953,34 @@ for (n_boot in bootstrap_counts) {
 
 print("Bootstrap stability analysis:")
 print(cv_stability)
+```
+
+### Multinomial Effective Sample Size Analysis
+
+```r
+# Calculate effective sample sizes for all combinations
+all_n <- calculate_all_multinomial_n(results)
+print(all_n)
+
+# Calculate for specific stratum and sex
+eff_n_male <- calculate_multinomial_n(results, stratum = "North", sex = "male")
+cat("Effective sample size for North stratum males:", eff_n_male$effective_n, "\n")
+
+# Calculate for pooled data (recommended for stock assessment)
+eff_n_total <- calculate_multinomial_n(results, sex = "total")
+cat("Pooled effective sample size:", eff_n_total$effective_n, "\n")
+cat("Based on", eff_n_total$n_length_bins, "length bins\n")
+cat("Model fit quality (residual SE):", round(eff_n_total$fit_summary$sigma, 4), "\n")
+
+# Use stricter filtering for robust estimates
+robust_n <- calculate_all_multinomial_n(
+  results, 
+  min_proportion = 0.001,  # Exclude very small proportions
+  max_cv = 3.0,           # Exclude high-CV length bins
+  remove_outliers = 0.1   # Remove 10% of worst-fitting points
+)
+print("Robust effective sample sizes:")
+print(robust_n)
 ```
 
 ## Notes for Real Applications

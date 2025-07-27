@@ -68,8 +68,24 @@ When bootstraps > 0: List containing:
     \item plus_group: logical, plus group used
     \item minus_group: logical, minus group used
     \item has_sex_data: logical, TRUE if sex-based columns present
+    \item scaling_type: character, type of scaling used ("weight" or "density")
+    \item summary_stats: list containing pre-computed summary statistics with components:
+      \itemize{
+        \item total_summary: list with n_fish (named vector of fish counts by sex) and n_hauls (total number of hauls)
+        \item stratum_summary: named list by stratum, each containing n_fish and n_hauls for that stratum
+      }
   }
-  When bootstraps = 0: 3D array (length x sex x stratum) of scaled length compositions only
+  When bootstraps = 0: List containing:
+  \itemize{
+    \item \code{length_compositions}: 3D array (length x sex x stratum) of scaled length compositions
+    \item \code{lengths}: Vector of length bin centers
+    \item \code{strata_names}: Vector of stratum names
+    \item \code{n_bootstraps}: 0 (no bootstraps performed)
+    \item \code{plus_group}: Plus group setting
+    \item \code{minus_group}: Minus group setting
+    \item \code{has_sex_data}: TRUE (indicates sex-specific analysis)
+    \item \code{scaling_type}: Type of scaling applied
+  }
 }
 \description{
 Calculates length compositions for fish data by sex and stratum, applying upweighting and optionally bootstrap resampling to estimate uncertainty.

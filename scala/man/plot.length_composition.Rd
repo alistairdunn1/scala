@@ -7,9 +7,10 @@
 \method{plot}{length_composition}(
   x,
   by_stratum = FALSE,
-  show_uncertainty = TRUE,
-  sex_colours = NULL,
+  show_CIs = TRUE,
   type = "composition",
+  length_bin_size = NULL,
+  unsexed = FALSE,
   ...
 )
 }
@@ -18,11 +19,13 @@
 
 \item{by_stratum}{Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.}
 
-\item{show_uncertainty}{Logical, whether to show 95 percent confidence interval ribbons if bootstrap results are available. Default is TRUE.}
-
-\item{sex_colours}{Named vector of colours for each sex category. If NULL, uses default colourblind-friendly palette.}
+\item{show_CIs}{Logical, whether to show 95 percent confidence interval ribbons if bootstrap results are available. Default is TRUE.}
 
 \item{type}{Character, either "composition" or "proportion" (or partial matches). Default is "composition".}
+
+\item{length_bin_size}{Numeric, size of length bins in cm for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.}
+
+\item{unsexed}{Logical, whether to include unsexed fish category in the plot. Default is FALSE.}
 
 \item{...}{Additional arguments (not used)}
 }

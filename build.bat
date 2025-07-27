@@ -19,7 +19,7 @@ call R CMD build --force scala
 if errorlevel 1 exit /b 1
 
 rem Install the package
-call R CMD INSTALL --build scala
+call R CMD INSTALL scala
 if errorlevel 1 exit /b 1
 
 rem Check the package

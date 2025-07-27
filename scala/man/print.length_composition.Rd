@@ -29,6 +29,7 @@ The function prints:
 - Stratum-specific length composition results if multiple strata are present
 - Summary statistics for total, male, female, and unsexed fish
 - CV columns if \code{show_cvs = TRUE} and uncertainty estimates are available
+- Confidence interval columns (CI_Lower and CI_Upper) for each sex category when bootstrap results are available
 - Weighted mean CVs across length classes (for bootstrap results only)
 
 The weighted mean CV is calculated as the composition-weighted average CV across length classes:
