@@ -110,10 +110,15 @@ Uses the allometric relationship: Weight = a * Length^b
 where a and b are species and sex-specific parameters.
 
 **Bootstrap uncertainty estimation:**
-When bootstraps > 0, the function provides multiple uncertainty measures:
-- Coefficient of Variation (CV): Relative variability as standard deviation / mean
-- Empirical 95 percent confidence intervals: 2.5th and 97.5th percentiles of bootstrap distribution
-The confidence intervals are non-parametric and do not assume any distributional form.
+When bootstraps > 0, the function provides multiple uncertainty measures using a hierarchical resampling approach:
+- **Sample-level resampling**: Samples are resampled with replacement within each stratum to capture spatial/temporal variation
+- **Fish-level resampling**: Individual fish are resampled with replacement within each sample to capture within-sample variation
+- **Coefficient of Variation (CV)**: Relative variability as standard deviation / mean across bootstrap iterations
+- **Empirical 95 percent confidence intervals**: 2.5th and 97.5th percentiles of bootstrap distribution
+
+This hierarchical approach captures both between-sample and within-sample uncertainty, providing more comprehensive
+and realistic uncertainty estimates than single-level resampling. The confidence intervals are non-parametric
+and do not assume any distributional form.
 
 **Data validation:**
 The function validates that all strata present in fish_data are also present in strata_data.

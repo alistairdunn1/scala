@@ -1,6 +1,6 @@
 #' Generate Sample Age-Length Key
 #'
-#' Creates a sample age-length key for testing and demonstration purposes.
+#' Creates a sample age-length key for testing and demonstration purposes (NOT to be used for a real world example).
 #' The key uses biological relationships where younger fish are typically
 #' found at smaller lengths.
 #'
@@ -10,6 +10,8 @@
 #' @param growth_params Named list of growth parameters (see details)
 #' @param cv Numeric, coefficient of variation for age-at-length (default 0.3)
 #' @param plus_group_age Logical, whether to combine older ages into plus group (default FALSE)
+#'
+#' @importFrom stats dnorm aggregate
 #'
 #' @details
 #' **Growth type parameters:**
@@ -191,4 +193,3 @@ generate_age_length_key <- function(length_range = c(20, 40),
 
   return(alk)
 }
-

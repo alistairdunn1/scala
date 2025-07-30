@@ -35,7 +35,7 @@ Data frame with columns:
   }
 }
 \description{
-Creates a sample age-length key for testing and demonstration purposes.
+Creates a sample age-length key for testing and demonstration purposes (NOT to be used for a real world example).
 The key uses biological relationships where younger fish are typically
 found at smaller lengths.
 }

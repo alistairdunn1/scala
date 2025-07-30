@@ -7,6 +7,7 @@
 \method{plot}{length_composition}(
   x,
   by_stratum = FALSE,
+  stratum = NULL,
   show_CIs = TRUE,
   type = "composition",
   length_bin_size = NULL,
@@ -18,6 +19,8 @@
 \item{x}{An object of class \code{length_composition}}
 
 \item{by_stratum}{Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.}
+
+\item{stratum}{Character, name of a specific stratum to plot. If provided, only that stratum is plotted (overrides by_stratum). Default is NULL.}
 
 \item{show_CIs}{Logical, whether to show 95 percent confidence interval ribbons if bootstrap results are available. Default is TRUE.}
 

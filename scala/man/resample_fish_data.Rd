@@ -2,7 +2,7 @@
 % Please edit documentation in R/resample_fish_data.R
 \name{resample_fish_data}
 \alias{resample_fish_data}
-\title{Resample Fish Data for Bootstrap Analysis}
+\title{Resample Fish Data for Bootstrap Analysis (Optimized)}
 \usage{
 resample_fish_data(fish_data)
 }
@@ -13,16 +13,20 @@ resample_fish_data(fish_data)
 Resampled fish data frame with the same structure as input
 }
 \description{
-Resamples fish data for bootstrap uncertainty estimation by resampling samples within each stratum.
+Resamples fish data for bootstrap uncertainty estimation by resampling both samples within strata
+and individual fish within samples using optimized vectorized operations.
 }
 \details{
-The function performs bootstrap resampling by:
-1. Identifying unique samples within each stratum
-2. Resampling samples with replacement within each stratum
-3. Returning the resampled data while preserving the original data structure
+The function performs hierarchical bootstrap resampling by:
+1. Resampling samples with replacement within each stratum
+2. For each selected sample, directly resampling aggregated fish counts using multinomial sampling
+3. Combining results without expensive expand/aggregate operations
 
-This resampling approach maintains the hierarchical structure of the data (strata > samples > fish observations)
-which is important for proper uncertainty estimation in the length composition calculations.
+This optimized approach captures the same uncertainty as the original expand/aggregate method
+but uses vectorized operations and avoids creating individual fish records, resulting in
+significantly faster performance.
+
+The hierarchical structure (strata > samples > fish) is preserved throughout the resampling process.
 }
 \seealso{
 \code{\link{calculate_length_compositions}} for the main analysis function that uses this resampling,

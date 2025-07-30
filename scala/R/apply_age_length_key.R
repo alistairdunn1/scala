@@ -1,8 +1,8 @@
-#' Apply Age-Length Key to Length Compositions
+#' Apply Age-Length Key to Length Compositions (Simplified)
 #'
 #' Internal function to convert length compositions to age compositions using age-length key.
-#' Supports both single keys (applied to all sexes) and sex-specific keys.
-#' Optimized implementation using vectorized operations and pre-computed matrices.
+#' This simplified version only uses exact length matches - no interpolation.
+#' For complete ALK with interpolation, use create_alk() first.
 #'
 #' @param length_comp 3D array of length compositions (length x sex x stratum)
 #' @param age_length_key Either a single data frame or a named list of sex-specific data frames
@@ -12,7 +12,11 @@
 #' @param minus_group_age Logical, whether to apply minus group for ages
 #' @param sex_specific_keys Logical, whether sex-specific keys are being used
 #'
-#' @return 3D array of age compositions (age x sex x stratum)
+#' @return List containing:
+#'   \itemize{
+#'     \item \code{age_compositions}: 3D array of age compositions (age x sex x stratum)
+#'     \item \code{interpolation_info}: List indicating no interpolation was used
+#'   }
 #' @keywords internal
 apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
                                  plus_group_age = FALSE, minus_group_age = FALSE,
@@ -29,7 +33,7 @@ apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
   # Set age values in first column
   age_comp[, "composition", ] <- ages
 
-  # Helper function to create optimized ALK matrix from key data
+  # Helper function to create ALK matrix from key data (exact matches only)
   create_alk_matrix <- function(key_data) {
     # Pre-allocate matrix with proper dimensions
     alk_matrix <- matrix(0, nrow = n_lengths, ncol = n_ages)
@@ -69,7 +73,7 @@ apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
     }
 
     # Apply sex-specific keys using vectorized operations
-    for (s in 1:n_strata) {
+    for (s in seq_len(n_strata)) {
       for (sex_idx in 2:4) { # male, female, unsexed
         sex_name <- sex_categories[sex_idx]
 
@@ -93,7 +97,7 @@ apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
     alk_matrix <- create_alk_matrix(age_length_key)
 
     # Apply to all sex categories and strata using vectorized operations
-    for (s in 1:n_strata) {
+    for (s in seq_len(n_strata)) {
       # Process all sex categories (except composition) in vectorized manner
       for (sex_idx in 2:5) { # Skip "composition" column
         sex_name <- sex_categories[sex_idx]
@@ -110,9 +114,8 @@ apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
     }
   }
 
-  # Optimized plus/minus group handling with vectorized operations
+  # Apply plus/minus group handling if requested (same logic as original)
   if (plus_group_age || minus_group_age) {
-    # Get age range from keys more efficiently
     if (sex_specific_keys) {
       all_ages <- unlist(lapply(
         age_length_key[!sapply(age_length_key, is.null)],
@@ -123,6 +126,7 @@ apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
       key_age_range <- range(age_length_key$age)
     }
 
+    # Warning if age ranges don't match
     if (plus_group_age && key_age_range[2] > max(ages)) {
       warning("Age-length key contains ages beyond specified age_range. Consider extending age_range or implementing plus group logic.")
     }
@@ -132,5 +136,14 @@ apply_age_length_key <- function(length_comp, age_length_key, ages, lengths,
     }
   }
 
-  return(age_comp)
+  # Return results with empty interpolation info (no interpolation performed)
+  return(list(
+    age_compositions = age_comp,
+    interpolation_info = list(
+      linear_interpolation = c(),
+      tail_extrapolation = c(),
+      user_specified_tails = c(),
+      interpolation_performed = FALSE
+    )
+  ))
 }

@@ -8,18 +8,28 @@ calculate_multinomial_n(
   x,
   stratum = NULL,
   sex = "total",
+  all = FALSE,
+  sex_categories = c("male", "female", "unsexed", "total"),
+  include_pooled = TRUE,
   remove_outliers = 0.05,
   min_proportion = 1e-04,
   max_cv = 5,
-  trace = FALSE
+  trace = FALSE,
+  quiet = TRUE
 )
 }
 \arguments{
 \item{x}{A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()}
 
-\item{stratum}{Character, name of stratum to analyze. If NULL (default), uses pooled data across all strata}
+\item{stratum}{Character, name of stratum to analyze. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE}
 
-\item{sex}{Character, sex category to analyze: "male", "female", "unsexed", or "total" (default)}
+\item{sex}{Character, sex category to analyze: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE}
+
+\item{all}{Logical, whether to calculate for all combinations of strata and sex categories (default FALSE)}
+
+\item{sex_categories}{Character vector of sex categories to analyze when all = TRUE. Default: c("male", "female", "unsexed", "total")}
+
+\item{include_pooled}{Logical, whether to include pooled results when all = TRUE (default TRUE)}
 
 \item{remove_outliers}{Numeric, proportion of outliers to remove (0-1). Default 0.05 removes worst 5 percent of fits}
 
@@ -28,9 +38,11 @@ calculate_multinomial_n(
 \item{max_cv}{Numeric, maximum CV threshold to include in analysis (default 5.0)}
 
 \item{trace}{Logical, whether to show fitting details (default FALSE)}
+
+\item{quiet}{Logical, whether to suppress individual fitting messages when all = TRUE (default TRUE)}
 }
 \value{
-Named list containing:
+When all = FALSE: Named list containing:
   \itemize{
     \item \code{effective_n}: The estimated multinomial effective sample size
     \item \code{proportions}: Vector of proportions used in the analysis
@@ -38,11 +50,19 @@ Named list containing:
     \item \code{n_bins}: Number of length or age bins included in the analysis
     \item \code{fit_summary}: Summary of the nonlinear model fit
   }
+
+  When all_combinations = TRUE: Data frame with columns:
+  \itemize{
+    \item \code{stratum}: Stratum name ("Pooled" for pooled results)
+    \item \code{sex}: Sex category
+    \item \code{effective_n}: Estimated effective sample size
+    \item \code{n_bins}: Number of length or age bins used
+    \item \code{fit_quality}: Model fit quality (residual standard error)
+  }
 }
 \description{
 Calculates the multinomial effective sample size from length or age composition proportions and
-their coefficients of variation. This provides a measure of the effective sample size
-that accounts for the variability in the composition data.
+their coefficients of variation. Can analyze a single combination or all combinations of strata and sex categories.
 }
 \details{
 The function fits a nonlinear model based on the multinomial distribution relationship:
@@ -78,6 +98,16 @@ print(eff_n$effective_n)
 # Calculate for specific stratum and sex
 eff_n_male_a <- calculate_multinomial_n(lc_result, stratum = "A", sex = "male")
 
+# Calculate for all combinations
+all_n <- calculate_multinomial_n(lc_result, all_combinations = TRUE)
+print(all_n)
+
+# Calculate only for total sex category, all strata
+total_n <- calculate_multinomial_n(lc_result,
+  all_combinations = TRUE,
+  sex_categories = "total"
+)
+
 # For age compositions
 age_key <- generate_age_length_key(
   length_range = c(20, 40),
@@ -87,6 +117,7 @@ age_key <- generate_age_length_key(
 )
 ac_result <- calculate_age_compositions(lc_result, age_key)
 eff_n_age <- calculate_multinomial_n(ac_result, sex = "total")
+all_n_age <- calculate_multinomial_n(ac_result, all_combinations = TRUE)
 }
 
 }

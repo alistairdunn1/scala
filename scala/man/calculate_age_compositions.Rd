@@ -8,7 +8,7 @@ calculate_age_compositions(
   x,
   age_length_key,
   age_range = NULL,
-  plus_group_age = FALSE,
+  plus_group_age = TRUE,
   minus_group_age = FALSE,
   verbose = TRUE
 )
@@ -20,12 +20,13 @@ calculate_age_compositions(
 \itemize{
   \item A single data frame with columns: length, age, and proportion (applied to all sex categories)
   \item A named list with elements: male, female, unsexed (each a data frame with length, age, proportion)
+  \item A complete ALK object from create_alk() (automatically detected)
 }
 Each length should have proportions summing to 1 across ages.}
 
 \item{age_range}{Numeric vector of min and max ages to include (e.g., c(1, 10))}
 
-\item{plus_group_age}{Logical, combine ages >= max age into a plus group (default FALSE)}
+\item{plus_group_age}{Logical, combine ages >= max age into a plus group (default TRUE)}
 
 \item{minus_group_age}{Logical, combine ages <= min age into a minus group (default FALSE)}
 
@@ -90,9 +91,14 @@ age-length key. This process is applied to:
 - If unsexed fish are present but no unsexed key provided, male key is used
 
 **Requirements:**
-- Should cover all length bins present in the length composition data
-- Missing length-age combinations are assumed to have proportion = 0
+- Age-length key must cover all length bins present in the length composition data
+- Missing length-age combinations will result in a warning. Use create_alk() to create a complete key with interpolation
 - Proportions for each length must sum to 1 across ages (within each sex)
+
+**Missing lengths:**
+If the age-length key does not include all length bins from the length composition data,
+a warning will be issued with details about missing lengths. For scenarios with missing
+lengths, use create_alk() to create a complete age-length key with interpolation.
 
 **Bootstrap uncertainty propagation:**
 Each bootstrap iteration of length compositions is converted to age compositions
@@ -161,6 +167,39 @@ age_result_sex <- calculate_age_compositions(
   x = lc_result,
   age_length_key = sex_specific_keys,
   age_range = c(1, 8)
+)
+
+# Example 3: Using create_alk() for complete coverage with interpolation
+# Age-length key with limited range (30-35 cm) but length compositions go 20-40 cm
+limited_age_key <- generate_age_length_key(
+  length_range = c(30, 35),
+  age_range = c(3, 6)
+)
+
+# Create complete ALK with interpolation for missing lengths
+tail_ages <- list(
+  min_lengths = data.frame(length = c(20, 22, 25), age = c(1, 1, 2)),
+  max_lengths = data.frame(length = c(38, 40), age = c(7, 8))
+)
+
+complete_alk <- create_alk(
+  age_length_key = limited_age_key,
+  lengths = 20:40,
+  ages = 1:8,
+  tail_ages = tail_ages
+)
+
+age_result_complete <- calculate_age_compositions(
+  x = lc_result,
+  age_length_key = complete_alk,
+  age_range = c(1, 8)
+)
+
+# Example 4: Limited key without interpolation (will show warning)
+age_result_limited <- calculate_age_compositions(
+  x = lc_result,
+  age_length_key = limited_age_key,
+  age_range = c(3, 6)
 )
 
 # View and plot results

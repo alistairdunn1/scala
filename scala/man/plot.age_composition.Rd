@@ -6,34 +6,34 @@
 \usage{
 \method{plot}{age_composition}(
   x,
+  by_stratum = FALSE,
+  stratum = NULL,
+  show_CIs = TRUE,
   type = "composition",
-  strata = NULL,
-  sex_categories = c("male", "female", "unsexed", "total"),
-  include_uncertainty = TRUE,
-  include_pooled = TRUE,
-  age_bins = 1,
+  age_bin_size = NULL,
+  unsexed = FALSE,
   ...
 )
 }
 \arguments{
 \item{x}{An age_composition object from calculate_age_compositions()}
 
-\item{type}{Character, type of plot: "composition" (default) or "proportion"}
+\item{by_stratum}{Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.}
 
-\item{strata}{Character vector of strata to plot. If NULL, plots all strata plus pooled}
+\item{stratum}{Character, name of a specific stratum to plot. If provided, only that stratum is plotted (overrides by_stratum). Default is NULL.}
 
-\item{sex_categories}{Character vector of sex categories to include: "male", "female", "unsexed", "total" (default all)}
+\item{show_CIs}{Logical, whether to show 95 percent confidence interval ribbons if bootstrap results are available. Default is TRUE.}
 
-\item{include_uncertainty}{Logical, whether to show bootstrap uncertainty ribbons (default TRUE)}
+\item{type}{Character, either "composition" or "proportion" (or partial matches). Default is "composition".}
 
-\item{include_pooled}{Logical, whether to include pooled results (default TRUE)}
+\item{age_bin_size}{Numeric, size of age bins for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.}
 
-\item{age_bins}{Numeric, bin width for aggregating ages (default 1, no binning)}
+\item{unsexed}{Logical, whether to include unsexed fish category in the plot. Default is FALSE.}
 
-\item{...}{Additional arguments passed to plotting functions}
+\item{...}{Additional arguments (not used)}
 }
 \value{
-ggplot2 object
+A ggplot object
 }
 \description{
 Creates visualizations of age composition data with optional uncertainty ribbons.

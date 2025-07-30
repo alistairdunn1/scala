@@ -7,7 +7,7 @@
 \method{print}{multinomial_n_summary}(x, ...)
 }
 \arguments{
-\item{x}{A multinomial_n_summary object from calculate_all_multinomial_n()}
+\item{x}{A multinomial_n_summary object from calculate_multinomial_n() when all_combinations = TRUE}
 
 \item{...}{Additional arguments (not used)}
 }

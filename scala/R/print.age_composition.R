@@ -62,7 +62,7 @@ print.age_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digits 
   cat("Sex categories: Male, Female, Unsexed, Total\n\n")
 
   # Determine if this is bootstrap or non-bootstrap result
-  is_bootstrap <- x$n_bootstraps > 0
+  is_bootstrap <- !is.null(x$n_bootstraps) && x$n_bootstraps > 0
 
   if (is_bootstrap) {
     # Bootstrap results - show pooled results
@@ -269,8 +269,106 @@ print.age_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digits 
   }
 
   cat("\n")
+
+  # Report interpolation information if available
+  if (!is.null(x$interpolation_info)) {
+    interpolation_table <- x$interpolation_info
+
+    # Check if interpolation table is the new format (data.frame)
+    if (is.data.frame(interpolation_table)) {
+      # New table format - check if any interpolation was used
+      non_original_methods <- interpolation_table[interpolation_table$method != "Original key data", ]
+
+      if (nrow(non_original_methods) > 0) {
+        cat("Interpolation Summary:\n")
+        cat("===================\n")
+
+        # Print the table in a readable format
+        if ("sex" %in% names(interpolation_table)) {
+          # Sex-specific table
+          cat("Method details by sex:\n")
+          print(interpolation_table)
+        } else {
+          # Single key table
+          cat("Method details:\n")
+          for (i in seq_len(nrow(interpolation_table))) {
+            method_info <- interpolation_table[i, ]
+            if (method_info$method != "Original key data") {
+              cat(sprintf(
+                "  %s: %d lengths (%s)\n",
+                method_info$method, method_info$count, method_info$lengths
+              ))
+            }
+          }
+        }
+        cat("\n")
+      }
+    } else {
+      # Legacy list format - maintain backward compatibility
+      interpolation_info <- interpolation_table
+
+      # Check if any interpolation was used
+      has_interpolation <- (
+        length(interpolation_info$linear_interpolation) > 0 ||
+          length(interpolation_info$tail_extrapolation) > 0 ||
+          length(interpolation_info$user_specified_tails) > 0
+      )
+
+      if (has_interpolation) {
+        cat("Interpolation Summary:\n")
+        cat("===================\n")
+
+        if (length(interpolation_info$user_specified_tails) > 0) {
+          cat(
+            "User-specified tail ages used for lengths:",
+            paste(sort(unique(interpolation_info$user_specified_tails)), collapse = ", "), "cm\n"
+          )
+        }
+
+        if (length(interpolation_info$linear_interpolation) > 0) {
+          cat(
+            "Linear interpolation used for lengths:",
+            paste(sort(unique(interpolation_info$linear_interpolation)), collapse = ", "), "cm\n"
+          )
+        }
+
+        if (length(interpolation_info$tail_extrapolation) > 0) {
+          cat(
+            "Tail extrapolation used for lengths:",
+            paste(sort(unique(interpolation_info$tail_extrapolation)), collapse = ", "), "cm\n"
+          )
+        }
+
+        # Report sex-specific details if available
+        if (!is.null(interpolation_info$sex_specific_info) && length(interpolation_info$sex_specific_info) > 0) {
+          cat("\nSex-specific interpolation details:\n")
+          for (sex in names(interpolation_info$sex_specific_info)) {
+            sex_info <- interpolation_info$sex_specific_info[[sex]]
+            if (length(sex_info$linear_interpolation) > 0 ||
+              length(sex_info$tail_extrapolation) > 0 ||
+              length(sex_info$user_specified_tails) > 0) {
+              cat("  ", toupper(sex), ":\n")
+              if (length(sex_info$user_specified_tails) > 0) {
+                cat("    User-specified tails:", paste(sort(unique(sex_info$user_specified_tails)), collapse = ", "), "cm\n")
+              }
+              if (length(sex_info$linear_interpolation) > 0) {
+                cat("    Linear interpolation:", paste(sort(unique(sex_info$linear_interpolation)), collapse = ", "), "cm\n")
+              }
+              if (length(sex_info$tail_extrapolation) > 0) {
+                cat("    Tail extrapolation:", paste(sort(unique(sex_info$tail_extrapolation)), collapse = ", "), "cm\n")
+              }
+            }
+          }
+        }
+        cat("\n")
+      } else {
+        cat("Age-length key covered all length bins - no interpolation required.\n\n")
+      }
+    }
+  }
+
   cat("Use plot(x) to visualize age compositions\n")
-  if (x$n_bootstraps > 0) {
+  if (!is.null(x$n_bootstraps) && x$n_bootstraps > 0) {
     cat("Use calculate_multinomial_n(x) to estimate effective sample sizes\n")
   }
 }

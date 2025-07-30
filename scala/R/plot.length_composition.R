@@ -1,9 +1,13 @@
+# Global variables for R CMD check
+utils::globalVariables(c("length_bin", "composition", "sex", "ci_lower", "ci_upper", "stratum"))
+
 #' Plot method for length composition objects
 #'
 #' Creates ggplot visualizations of length composition results.
 #'
 #' @param x An object of class \code{length_composition}
 #' @param by_stratum Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.
+#' @param stratum Character, name of a specific stratum to plot. If provided, only that stratum is plotted (overrides by_stratum). Default is NULL.
 #' @param show_CIs Logical, whether to show 95 percent confidence interval ribbons if bootstrap results are available. Default is TRUE.
 #' @param type Character, either "composition" or "proportion" (or partial matches). Default is "composition".
 #' @param length_bin_size Numeric, size of length bins in cm for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.
@@ -17,6 +21,7 @@
 #' @export
 plot.length_composition <- function(x,
                                     by_stratum = FALSE,
+                                    stratum = NULL,
                                     show_CIs = TRUE,
                                     type = "composition",
                                     length_bin_size = NULL,
@@ -43,6 +48,24 @@ plot.length_composition <- function(x,
   if (!is.null(length_bin_size)) {
     if (!is.numeric(length_bin_size) || length(length_bin_size) != 1 || length_bin_size <= 0) {
       stop("length_bin_size must be a positive numeric value")
+    }
+  }
+
+  # Validate stratum parameter
+  if (!is.null(stratum)) {
+    if (!is.character(stratum) || length(stratum) != 1) {
+      stop("stratum must be a single character string")
+    }
+    # Check if stratum exists in the data
+    available_strata <- NULL
+    if (!is.null(x$length_composition)) {
+      available_strata <- dimnames(x$length_composition)[[3]]
+    } else if (!is.null(x$length_compositions)) {
+      available_strata <- dimnames(x$length_compositions)[[3]]
+    }
+
+    if (!is.null(available_strata) && !stratum %in% available_strata) {
+      stop(paste("stratum '", stratum, "' not found. Available strata:", paste(available_strata, collapse = ", ")))
     }
   }
 
@@ -105,8 +128,88 @@ plot.length_composition <- function(x,
     return(list(data = aggregated_data, lengths = bin_centers))
   }
 
-  # Determine which dataset to use based on by_stratum
-  if (!by_stratum) {
+  # Determine which dataset to use based on by_stratum and stratum parameters
+  if (!is.null(stratum)) {
+    # Plot a specific stratum only
+    if (!is.null(x$length_composition)) {
+      # Bootstrap results available
+      comp_data <- x$length_composition[, , stratum, drop = FALSE]
+      ci_lower <- x$lc_ci_lower[, , stratum, drop = FALSE]
+      ci_upper <- x$lc_ci_upper[, , stratum, drop = FALSE]
+      if (type == "proportion") {
+        comp_data <- x$proportions[, , stratum, drop = FALSE]
+        ci_lower <- x$proportions_ci_lower[, , stratum, drop = FALSE]
+        ci_upper <- x$proportions_ci_upper[, , stratum, drop = FALSE]
+      }
+
+      # Apply length binning if requested
+      lengths_vec <- as.numeric(dimnames(comp_data)[[1]])
+      bin_result <- aggregate_length_bins(comp_data, lengths_vec, length_bin_size)
+      comp_data <- bin_result$data
+      lengths_vec <- bin_result$lengths
+
+      # Apply binning to confidence intervals if available
+      if (!is.null(ci_lower) && !is.null(ci_upper)) {
+        ci_lower_bin <- aggregate_length_bins(ci_lower, as.numeric(dimnames(ci_lower)[[1]]), length_bin_size)
+        ci_upper_bin <- aggregate_length_bins(ci_upper, as.numeric(dimnames(ci_upper)[[1]]), length_bin_size)
+        ci_lower <- ci_lower_bin$data
+        ci_upper <- ci_upper_bin$data
+      }
+    } else {
+      # Simple results (no bootstrap)
+      comp_data <- x$length_compositions[, , stratum, drop = FALSE]
+      ci_lower <- NULL
+      ci_upper <- NULL
+
+      # Apply length binning if requested
+      lengths_vec <- as.numeric(dimnames(comp_data)[[1]])
+      bin_result <- aggregate_length_bins(comp_data, lengths_vec, length_bin_size)
+      comp_data <- bin_result$data
+      lengths_vec <- bin_result$lengths
+
+      if (type == "proportion") {
+        # Convert to proportions
+        total_count <- sum(comp_data[, "total", 1])
+        if (total_count > 0) {
+          comp_data[, , 1] <- comp_data[, , 1] / total_count
+        }
+      }
+    }
+
+    # Convert to data frame format similar to pooled data (remove stratum dimension)
+    comp_data_2d <- comp_data[, , 1]
+
+    # Convert to data frame for ggplot
+    plot_data_list <- list()
+
+    # Define sex categories to include based on unsexed parameter
+    sex_categories <- if (unsexed) {
+      c("male", "female", "unsexed", "total")
+    } else {
+      c("male", "female", "total")
+    }
+
+    for (sex_name in sex_categories) {
+      if (sex_name %in% colnames(comp_data_2d)) {
+        sex_data <- data.frame(
+          length_bin = lengths_vec,
+          composition = comp_data_2d[, sex_name],
+          sex = tools::toTitleCase(as.character(sex_name)),
+          stringsAsFactors = FALSE
+        )
+
+        # Add confidence intervals if available
+        if (!is.null(ci_lower) && !is.null(ci_upper)) {
+          sex_data$ci_lower <- ci_lower[, sex_name, 1]
+          sex_data$ci_upper <- ci_upper[, sex_name, 1]
+        }
+
+        plot_data_list[[sex_name]] <- sex_data
+      }
+    }
+
+    plot_data <- do.call(rbind, plot_data_list)
+  } else if (!by_stratum) {
     # Use pooled data across all strata
     if (!is.null(x$pooled_length_composition)) {
       # Bootstrap results available
@@ -312,6 +415,9 @@ plot.length_composition <- function(x,
   # Set up faceting for by_stratum plots
   if (by_stratum) {
     p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_grid(stratum ~ sex, scales = "fixed")
+  } else if (!is.null(stratum)) {
+    # For single stratum plots, facet by sex only
+    p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_wrap(~sex, scales = "fixed")
   }
 
   # Add labels and theme

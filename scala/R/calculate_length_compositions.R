@@ -81,10 +81,15 @@
 #' where a and b are species and sex-specific parameters.
 #'
 #' **Bootstrap uncertainty estimation:**
-#' When bootstraps > 0, the function provides multiple uncertainty measures:
-#' - Coefficient of Variation (CV): Relative variability as standard deviation / mean
-#' - Empirical 95 percent confidence intervals: 2.5th and 97.5th percentiles of bootstrap distribution
-#' The confidence intervals are non-parametric and do not assume any distributional form.
+#' When bootstraps > 0, the function provides multiple uncertainty measures using a hierarchical resampling approach:
+#' - **Sample-level resampling**: Samples are resampled with replacement within each stratum to capture spatial/temporal variation
+#' - **Fish-level resampling**: Individual fish are resampled with replacement within each sample to capture within-sample variation
+#' - **Coefficient of Variation (CV)**: Relative variability as standard deviation / mean across bootstrap iterations
+#' - **Empirical 95 percent confidence intervals**: 2.5th and 97.5th percentiles of bootstrap distribution
+#'
+#' This hierarchical approach captures both between-sample and within-sample uncertainty, providing more comprehensive
+#' and realistic uncertainty estimates than single-level resampling. The confidence intervals are non-parametric
+#' and do not assume any distributional form.
 #'
 #' **Data validation:**
 #' The function validates that all strata present in fish_data are also present in strata_data.
@@ -267,8 +272,10 @@ calculate_length_compositions <- function(fish_data,
   main_lf <- calculate_length_compositions_core(fish_data, strata_data, length_range, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed, lengths, strata_names)
 
   # If no bootstrapping requested, return simple result
-  if (verbose && bootstraps == 0) {
-    cat("No bootstrap uncertainty estimation requested.\n")
+  if (bootstraps == 0) {
+    if (verbose) {
+      cat("No bootstrap uncertainty estimation requested.\n")
+    }
 
     # Create a simple result object with class
     simple_result <- list(
@@ -306,9 +313,13 @@ calculate_length_compositions <- function(fish_data,
     pooled_proportions <- pooled_lf / pooled_total
   }
 
-  # Bootstrap if requested
-  if (verbose && bootstraps > 0) {
-    cat("Running", bootstraps, "bootstrap iterations...\n")
+  # Hierarchical bootstrap if requested
+  if (bootstraps > 0) {
+    if (verbose) {
+      cat("Running", bootstraps, "bootstrap iterations with hierarchical resampling...\n")
+      cat("  - Resampling samples within strata\n")
+      cat("  - Resampling fish within samples\n")
+    }
 
     # Set up bootstrap arrays
     lf_bootstraps <- array(0, dim = c(n_lengths, 5, n_strata, bootstraps))
@@ -511,14 +522,6 @@ calculate_length_compositions <- function(fish_data,
 ##' Core calculation function for length compositions
 ##' @keywords internal
 calculate_length_compositions_core <- function(fish_data, strata_data, length_range, plus_group, minus_group, scaling_type, lw_params_male, lw_params_female, lw_params_unsexed, lengths, strata_names) {
-  # Helper function to calculate individual fish weight
-  calculate_fish_weight <- function(length, sex, male_count, female_count, unsexed_count) {
-    weight_male <- male_count * lw_params_male["a"] * (length^lw_params_male["b"]) / 1000 # Convert g to kg
-    weight_female <- female_count * lw_params_female["a"] * (length^lw_params_female["b"]) / 1000
-    weight_unsexed <- unsexed_count * lw_params_unsexed["a"] * (length^lw_params_unsexed["b"]) / 1000
-    return(weight_male + weight_female + weight_unsexed)
-  }
-
   n_strata <- length(strata_names)
   n_lengths <- length(lengths)
 
@@ -529,6 +532,19 @@ calculate_length_compositions_core <- function(fish_data, strata_data, length_ra
   # Set length values
   lc_result[, "composition", ] <- lengths
 
+  # Pre-compute fish weights for all data using vectorized operations
+  # This avoids redundant calculations in each stratum loop
+  fish_data$fish_weight <- with(
+    fish_data,
+    male * lw_params_male["a"] * (length^lw_params_male["b"]) / 1000 +
+      female * lw_params_female["a"] * (length^lw_params_female["b"]) / 1000 +
+      unsexed * lw_params_unsexed["a"] * (length^lw_params_unsexed["b"]) / 1000
+  )
+
+  # Pre-compute weight by sample for all data to avoid repeated aggregations
+  weight_by_sample <- aggregate(fish_weight ~ sample_id, data = fish_data, sum)
+  names(weight_by_sample)[2] <- "observed_weight_kg"
+
   # Process each stratum
   for (s in 1:n_strata) {
     stratum <- strata_names[s]
@@ -537,32 +553,23 @@ calculate_length_compositions_core <- function(fish_data, strata_data, length_ra
     if (nrow(stratum_data) == 0) next
 
     if (scaling_type == "weight") {
-      # Weight-based scaling approach
+      # Weight-based scaling approach - optimized with pre-computed weights
 
-      # Calculate sample-level summaries
+      # Calculate sample-level summaries using pre-aggregated data
       sample_summary <- aggregate(
         cbind(male, female, unsexed, total) ~
           sample_id + sample_weight_kg + total_catch_weight_kg,
         data = stratum_data, sum
       )
 
-      # Calculate observed weight for each sample using vectorized operations
-      # Add fish weights to stratum_data first
-      stratum_data$fish_weight <- with(
-        stratum_data,
-        male * lw_params_male["a"] * (length^lw_params_male["b"]) / 1000 +
-          female * lw_params_female["a"] * (length^lw_params_female["b"]) / 1000 +
-          unsexed * lw_params_unsexed["a"] * (length^lw_params_unsexed["b"]) / 1000
-      )
+      # Use pre-computed weights - filter for this stratum's samples
+      stratum_sample_ids <- unique(stratum_data$sample_id)
+      stratum_weights <- weight_by_sample[weight_by_sample$sample_id %in% stratum_sample_ids, ]
 
-      # Calculate observed weight by sample using aggregate
-      weight_by_sample <- aggregate(fish_weight ~ sample_id, data = stratum_data, sum)
-      names(weight_by_sample)[2] <- "observed_weight_kg"
+      # Merge with sample_summary using vectorized operation
+      sample_summary <- merge(sample_summary, stratum_weights, by = "sample_id")
 
-      # Merge with sample_summary
-      sample_summary <- merge(sample_summary, weight_by_sample, by = "sample_id")
-
-      # Calculate upweighting factor
+      # Calculate upweighting factor using vectorized division
       sample_summary$upweight_factor <- sample_summary$total_catch_weight_kg / sample_summary$observed_weight_kg
 
       # Get stratum total catch
@@ -570,7 +577,7 @@ calculate_length_compositions_core <- function(fish_data, strata_data, length_ra
       stratum_sample_total <- sum(sample_summary$total_catch_weight_kg)
       stratum_upweight <- stratum_total / stratum_sample_total
     } else if (scaling_type == "density") {
-      # Density-based scaling approach
+      # Density-based scaling approach - optimized with pre-computed weights
 
       # Calculate sample-level summaries
       sample_summary <- aggregate(
@@ -579,28 +586,17 @@ calculate_length_compositions_core <- function(fish_data, strata_data, length_ra
         data = stratum_data, sum
       )
 
-      # Calculate observed weight for each sample using vectorized operations
-      # Use the fish_weight already calculated for this stratum_data
-      if (!"fish_weight" %in% names(stratum_data)) {
-        stratum_data$fish_weight <- with(
-          stratum_data,
-          male * lw_params_male["a"] * (length^lw_params_male["b"]) / 1000 +
-            female * lw_params_female["a"] * (length^lw_params_female["b"]) / 1000 +
-            unsexed * lw_params_unsexed["a"] * (length^lw_params_unsexed["b"]) / 1000
-        )
-      }
+      # Use pre-computed weights - filter for this stratum's samples
+      stratum_sample_ids <- unique(stratum_data$sample_id)
+      stratum_weights <- weight_by_sample[weight_by_sample$sample_id %in% stratum_sample_ids, ]
 
-      # Calculate observed weight by sample using aggregate
-      weight_by_sample <- aggregate(fish_weight ~ sample_id, data = stratum_data, sum)
-      names(weight_by_sample)[2] <- "observed_weight_kg"
+      # Merge with sample_summary using vectorized operation
+      sample_summary <- merge(sample_summary, stratum_weights, by = "sample_id")
 
-      # Merge with sample_summary
-      sample_summary <- merge(sample_summary, weight_by_sample, by = "sample_id")
-
-      # Calculate expected weight based on density and area
+      # Calculate expected weight based on density and area using vectorized operations
       sample_summary$expected_weight_kg <- sample_summary$catch_density_kg_km2 * sample_summary$sample_area_km2
 
-      # Calculate upweighting factor
+      # Calculate upweighting factor using vectorized division
       sample_summary$upweight_factor <- sample_summary$expected_weight_kg / sample_summary$observed_weight_kg
 
       # Get stratum total area and calculate stratum upweight
@@ -611,58 +607,72 @@ calculate_length_compositions_core <- function(fish_data, strata_data, length_ra
       stop("scaling_type must be either 'weight' or 'density'")
     }
 
-    # Apply upweighting to length frequencies using vectorized operations
-    # Merge upweight factors with fish data
+    # Apply upweighting to length frequencies using optimized vectorized operations
+    # Create lookup table for upweight factors
     upweight_lookup <- sample_summary[, c("sample_id", "upweight_factor")]
-    stratum_data_weighted <- merge(stratum_data, upweight_lookup, by = "sample_id")
+
+    # Merge upweight factors with stratum data efficiently
+    stratum_data_weighted <- merge(stratum_data, upweight_lookup, by = "sample_id", sort = FALSE)
+
+    # Calculate total upweight using vectorized operations
     stratum_data_weighted$total_upweight <- stratum_data_weighted$upweight_factor * stratum_upweight
 
-    # Filter for lengths in range
-    valid_lengths <- stratum_data_weighted[
-      stratum_data_weighted$length >= min(lengths) &
-        stratum_data_weighted$length <= max(lengths),
-    ]
+    # Filter for lengths in range using vectorized comparison
+    length_range_filter <- stratum_data_weighted$length >= min(lengths) &
+      stratum_data_weighted$length <= max(lengths)
+    valid_lengths <- stratum_data_weighted[length_range_filter, ]
 
     if (nrow(valid_lengths) > 0) {
-      # Calculate weighted contributions for each sex category
+      # Calculate weighted contributions for each sex category using vectorized operations
       valid_lengths$male_weighted <- valid_lengths$male * valid_lengths$total_upweight
       valid_lengths$female_weighted <- valid_lengths$female * valid_lengths$total_upweight
       valid_lengths$unsexed_weighted <- valid_lengths$unsexed * valid_lengths$total_upweight
       valid_lengths$total_weighted <- valid_lengths$total * valid_lengths$total_upweight
 
-      # Aggregate by length
+      # Aggregate by length using optimized aggregation
       length_aggregated <- aggregate(
         cbind(male_weighted, female_weighted, unsexed_weighted, total_weighted) ~ length,
         data = valid_lengths, sum
       )
 
-      # Update results array
-      for (k in seq_len(nrow(length_aggregated))) {
-        len <- length_aggregated$length[k]
-        len_idx <- which(lengths == len)
-        if (length(len_idx) > 0) {
-          lc_result[len_idx, "male", s] <- lc_result[len_idx, "male", s] + length_aggregated$male_weighted[k]
-          lc_result[len_idx, "female", s] <- lc_result[len_idx, "female", s] + length_aggregated$female_weighted[k]
-          lc_result[len_idx, "unsexed", s] <- lc_result[len_idx, "unsexed", s] + length_aggregated$unsexed_weighted[k]
-          lc_result[len_idx, "total", s] <- lc_result[len_idx, "total", s] + length_aggregated$total_weighted[k]
-        }
+      # Update results array using vectorized indexing
+      # Create length index lookup for faster matching
+      length_indices <- match(length_aggregated$length, lengths)
+      valid_indices <- !is.na(length_indices)
+
+      if (any(valid_indices)) {
+        valid_length_indices <- length_indices[valid_indices]
+        valid_aggregated <- length_aggregated[valid_indices, ]
+
+        # Vectorized updates to results array
+        lc_result[valid_length_indices, "male", s] <- lc_result[valid_length_indices, "male", s] + valid_aggregated$male_weighted
+        lc_result[valid_length_indices, "female", s] <- lc_result[valid_length_indices, "female", s] + valid_aggregated$female_weighted
+        lc_result[valid_length_indices, "unsexed", s] <- lc_result[valid_length_indices, "unsexed", s] + valid_aggregated$unsexed_weighted
+        lc_result[valid_length_indices, "total", s] <- lc_result[valid_length_indices, "total", s] + valid_aggregated$total_weighted
       }
     }
 
-    # Apply plus/minus groups if specified using vectorized operations
+    # Apply plus/minus groups if specified using optimized vectorized operations
     if (plus_group) {
       # Sum all lengths > max into the plus group (last length bin)
       max_length_idx <- length(lengths)
       max_length <- max(lengths)
 
       # Find fish with lengths greater than max using vectorized operations
-      plus_group_fish <- stratum_data_weighted[stratum_data_weighted$length > max_length, ]
+      plus_group_filter <- stratum_data_weighted$length > max_length
+      plus_group_fish <- stratum_data_weighted[plus_group_filter, ]
+
       if (nrow(plus_group_fish) > 0) {
-        plus_totals <- colSums(plus_group_fish[c("male", "female", "unsexed", "total")] * plus_group_fish$total_upweight)
-        lc_result[max_length_idx, "male", s] <- lc_result[max_length_idx, "male", s] + plus_totals["male"]
-        lc_result[max_length_idx, "female", s] <- lc_result[max_length_idx, "female", s] + plus_totals["female"]
-        lc_result[max_length_idx, "unsexed", s] <- lc_result[max_length_idx, "unsexed", s] + plus_totals["unsexed"]
-        lc_result[max_length_idx, "total", s] <- lc_result[max_length_idx, "total", s] + plus_totals["total"]
+        # Vectorized calculation of weighted totals
+        weighted_male <- sum(plus_group_fish$male * plus_group_fish$total_upweight)
+        weighted_female <- sum(plus_group_fish$female * plus_group_fish$total_upweight)
+        weighted_unsexed <- sum(plus_group_fish$unsexed * plus_group_fish$total_upweight)
+        weighted_total <- sum(plus_group_fish$total * plus_group_fish$total_upweight)
+
+        lc_result[max_length_idx, "male", s] <- lc_result[max_length_idx, "male", s] + weighted_male
+        lc_result[max_length_idx, "female", s] <- lc_result[max_length_idx, "female", s] + weighted_female
+        lc_result[max_length_idx, "unsexed", s] <- lc_result[max_length_idx, "unsexed", s] + weighted_unsexed
+        lc_result[max_length_idx, "total", s] <- lc_result[max_length_idx, "total", s] + weighted_total
       }
     }
 
@@ -672,13 +682,20 @@ calculate_length_compositions_core <- function(fish_data, strata_data, length_ra
       min_length <- min(lengths)
 
       # Find fish with lengths less than min using vectorized operations
-      minus_group_fish <- stratum_data_weighted[stratum_data_weighted$length < min_length, ]
+      minus_group_filter <- stratum_data_weighted$length < min_length
+      minus_group_fish <- stratum_data_weighted[minus_group_filter, ]
+
       if (nrow(minus_group_fish) > 0) {
-        minus_totals <- colSums(minus_group_fish[c("male", "female", "unsexed", "total")] * minus_group_fish$total_upweight)
-        lc_result[min_length_idx, "male", s] <- lc_result[min_length_idx, "male", s] + minus_totals["male"]
-        lc_result[min_length_idx, "female", s] <- lc_result[min_length_idx, "female", s] + minus_totals["female"]
-        lc_result[min_length_idx, "unsexed", s] <- lc_result[min_length_idx, "unsexed", s] + minus_totals["unsexed"]
-        lc_result[min_length_idx, "total", s] <- lc_result[min_length_idx, "total", s] + minus_totals["total"]
+        # Vectorized calculation of weighted totals
+        weighted_male <- sum(minus_group_fish$male * minus_group_fish$total_upweight)
+        weighted_female <- sum(minus_group_fish$female * minus_group_fish$total_upweight)
+        weighted_unsexed <- sum(minus_group_fish$unsexed * minus_group_fish$total_upweight)
+        weighted_total <- sum(minus_group_fish$total * minus_group_fish$total_upweight)
+
+        lc_result[min_length_idx, "male", s] <- lc_result[min_length_idx, "male", s] + weighted_male
+        lc_result[min_length_idx, "female", s] <- lc_result[min_length_idx, "female", s] + weighted_female
+        lc_result[min_length_idx, "unsexed", s] <- lc_result[min_length_idx, "unsexed", s] + weighted_unsexed
+        lc_result[min_length_idx, "total", s] <- lc_result[min_length_idx, "total", s] + weighted_total
       }
     }
   }

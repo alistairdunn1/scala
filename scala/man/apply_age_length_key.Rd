@@ -2,7 +2,7 @@
 % Please edit documentation in R/apply_age_length_key.R
 \name{apply_age_length_key}
 \alias{apply_age_length_key}
-\title{Apply Age-Length Key to Length Compositions}
+\title{Apply Age-Length Key to Length Compositions (Simplified)}
 \usage{
 apply_age_length_key(
   length_comp,
@@ -30,11 +30,15 @@ apply_age_length_key(
 \item{sex_specific_keys}{Logical, whether sex-specific keys are being used}
 }
 \value{
-3D array of age compositions (age x sex x stratum)
+List containing:
+  \itemize{
+    \item \code{age_compositions}: 3D array of age compositions (age x sex x stratum)
+    \item \code{interpolation_info}: List indicating no interpolation was used
+  }
 }
 \description{
 Internal function to convert length compositions to age compositions using age-length key.
-Supports both single keys (applied to all sexes) and sex-specific keys.
-Optimized implementation using vectorized operations and pre-computed matrices.
+This simplified version only uses exact length matches - no interpolation.
+For complete ALK with interpolation, use create_alk() first.
 }
 \keyword{internal}

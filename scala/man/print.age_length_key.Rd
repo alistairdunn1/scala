@@ -7,7 +7,7 @@
 \method{print}{age_length_key}(x, ...)
 }
 \arguments{
-\item{x}{An age-length key data frame}
+\item{x}{An age-length key data frame or list of sex-specific age-length keys}
 
 \item{...}{Additional arguments (not used)}
 }
