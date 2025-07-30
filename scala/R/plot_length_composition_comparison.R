@@ -1,6 +1,6 @@
 #' Plot multiple length composition objects in a multi-panel layout
 #'
-#' Creates a multi-panel ggplot visualization where each row represents a different
+#' Creates a multi-panel ggplot visualisation where each row represents a different
 #' length composition result and columns show sex categories.
 #'
 #' @param x List of objects of class \code{length_composition}

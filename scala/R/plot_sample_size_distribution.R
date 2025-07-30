@@ -20,7 +20,7 @@ utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
 #' @return A ggplot object showing the stacked histogram of sample sizes by strata.
 #'
 #' @details
-#' This function visualizes the output from \code{\link{evaluate_sample_sizes}} as a
+#' This function visualises the output from \code{\link{evaluate_sample_sizes}} as a
 #' stacked histogram, making it easy to see:
 #' \itemize{
 #'   \item The distribution of sample sizes across strata
@@ -158,7 +158,7 @@ plot_sample_size_distribution <- function(evaluation_result,
       p <- p + ggplot2::geom_vline(
         xintercept = min_sufficient,
         linetype = "dashed",
-        color = "darkgray",
+        colour = "darkgray",
         size = 0.8,
         alpha = 0.7
       )

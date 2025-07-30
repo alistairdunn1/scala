@@ -15,6 +15,6 @@ plot_alk(alk, by_sex = TRUE)
 ggplot2 object
 }
 \description{
-Creates a heatmap visualization of the age-length key showing
+Creates a heatmap visualisation of the age-length key showing
 the probability distribution of ages for each length.
 }

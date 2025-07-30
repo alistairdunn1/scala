@@ -1,6 +1,6 @@
-# scala: Scaled Catch at length and Age Compositions
+# scala: Scaled catch at length and age composition analyses
 
-An R implementation for calculating scaled length compositions and age compositions from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation. 
+An R implementation for calculating scaled length compositions and age compositions from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation.
 
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
@@ -18,7 +18,7 @@ Supports both **commercial fisheries** (weight-based scaling) and **research sur
 - [Available Functions](#available-functions)
 - [Input Data Format](#input-data-format)
 - [Usage](#usage)
-- [Data Visualization](#data-visualization)
+- [Data Visualisation](#data-visualisation)
 - [Function Parameters](#function-parameters)
 - [Output Structure](#output-structure)
 - [Worked Example](#worked-example)
@@ -64,6 +64,7 @@ build.bat
 ```
 
 This script will:
+
 - Generate documentation using roxygen2
 - Build the package
 - Run R CMD check for validation
@@ -207,7 +208,7 @@ The package provides the following main functions:
 - **`create_alk()`**: Create complete age-length keys with interpolation/extrapolation for missing length-age combinations, supporting both single and sex-specific keys
 - **`evaluate_sample_sizes()`**: Evaluate whether sample sizes are adequate for reliable bootstrap uncertainty estimation by checking fish per sample and samples per stratum against recommended thresholds
 - **`filter_small_samples()`**: Create filtered datasets by excluding specific samples identified by sample evaluation (simplified interface)
-- **`generate_test_data()`**: Generate sample datasets for testing and examples  
+- **`generate_test_data()`**: Generate sample datasets for testing and examples
 - **`generate_commercial_test_data()`**: Generate commercial fisheries test data
 - **`generate_survey_test_data()`**: Generate research survey test data
 - **`generate_age_length_key()`**: Create sample age-length keys with various growth models
@@ -215,27 +216,29 @@ The package provides the following main functions:
 - **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
 - **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from length or age composition proportions and CVs
 - **`calculate_all_multinomial_n()`**: Calculate effective sample sizes for all stratum/sex combinations from length or age compositions
-- **`plot.length_composition()`**: Create professional visualizations with lines and uncertainty ribbons (requires ggplot2)
-- **`plot.age_composition()`**: Visualize age compositions with uncertainty ribbons using **identical interface** to length plotting
+- **`plot.length_composition()`**: Create professional visualisations with lines and uncertainty ribbons (requires ggplot2)
+- **`plot.age_composition()`**: Visualise age compositions with uncertainty ribbons using **identical interface** to length plotting
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
-- **`plot_alk()`**: Visualize age-length keys as heatmaps
-- **`plot_sample_size_distribution()`**: Create stacked histograms showing sample size distributions by strata, with samples categorized by adequacy (non-representative small, representative small, adequate)
+- **`plot_alk()`**: Visualise age-length keys as heatmaps
+- **`plot_sample_size_distribution()`**: Create stacked histograms showing sample size distributions by strata, with samples categorised by adequacy (non-representative small, representative small, adequate)
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
 
 ### Plotting Features
 
 The plotting system includes:
+
 - **Consistent interface**: Both length and age composition plotting functions use identical parameter names and functionality
 - **Line plots** with uncertainty ribbons instead of traditional bar charts
-- **Faceted layouts** for multi-stratum, multi-sex visualization
-- **Bootstrap uncertainty** visualization as shaded confidence regions
+- **Faceted layouts** for multi-stratum, multi-sex visualisation
+- **Bootstrap uncertainty** visualisation as shaded confidence regions
 - **Flexible binning** for both length (`length_bin_size`) and age (`age_bin_size`) data aggregation
-- **Length binning** for aggregated visualization at coarser scales
+- **Length binning** for aggregated visualisation at coarser scales
 - **Sex category filtering** with optional inclusion of unsexed fish
 
 ### Multinomial Effective Sample Size
 
 Functionality for calculating multinomial effective sample sizes from both length and age compositions:
+
 - **Individual calculations** for specific stratum and sex combinations
 - **Batch processing** for all combinations simultaneously
 - **Robust fitting** with outlier detection and removal options
@@ -243,6 +246,7 @@ Functionality for calculating multinomial effective sample sizes from both lengt
 - **Compatible with both length and age composition data**
 
 This is particularly useful for:
+
 - Stock assessment applications requiring effective sample sizes
 - Data weighting in integrated models
 - Quality control of length composition data
@@ -252,29 +256,34 @@ This is particularly useful for:
 The package provides a streamlined workflow for converting length compositions to age compositions:
 
 **Smart Age-Length Key Detection**:
+
 - **Complete keys**: `calculate_age_compositions()` automatically detects complete age-length keys (created by `create_alk()`) and applies them directly
 - **Incomplete keys**: Traditional age-length keys are detected and users are warned about missing length data instead of silent interpolation
-- **Clear warnings**: Explicit warnings identify which lengths are missing from incomplete keys
+- **Warnings**: Explicit warnings identify which lengths are missing from incomplete keys
 
 **Two-Step Workflow for Incomplete Keys**:
+
 1. **`create_alk()`**: Creates complete age-length keys with interpolation/extrapolation for missing combinations
 2. **`calculate_age_compositions()`**: Applies the complete key with full uncertainty propagation
 
 **Key Features**:
+
 - **Exact-match processing**: Simplified age-length key application using only exact length matches (no interpolation during application)
 - **Linear interpolation**: Smart interpolation between known length-age combinations in `create_alk()`
 - **Tail extrapolation**: Automatic extrapolation for lengths beyond the key range, with optional user-specified tail ages
 - **Sex-specific support**: Full support for male, female, and unsexed fish categories
 - **Bootstrap uncertainty**: Uncertainty propagation through all age composition calculations
-- **Comprehensive visualization**: Professional plots with uncertainty ribbons and multi-panel layouts
+- **Comprehensive visualisation**: Plots with uncertainty ribbons and multi-panel layouts
 
 **Benefits of the Simplified Approach**:
+
 - **Clear separation**: Data preparation (`create_alk()`) vs calculation (`calculate_age_compositions()`)
 - **Explicit warnings**: Users know exactly which length data is problematic
 - **Robust processing**: Complete keys ensure all length bins are covered
 - **Maintainable code**: Single-responsibility functions that are easier to debug and extend
 
 This enables:
+
 - Full age composition analysis from length-based sampling with complete uncertainty estimation
 - Robust handling of incomplete age-length keys through explicit interpolation step
 - Clear user feedback about data completeness and processing decisions
@@ -285,7 +294,7 @@ For detailed documentation of any function, use `?function_name` in R (e.g., `?c
 
 ## Creating Complete Age-Length Keys
 
-The `create_alk()` function addresses a common problem in fisheries analysis: incomplete age-length keys that don't cover all length bins present in your length composition data.
+The `create_alk()` function addresses a common problem in fisheries analysis: incomplete age-length keys that don't cover all length bins present in the length composition data.
 
 ### Key Features
 
@@ -351,6 +360,7 @@ complete_alk <- create_alk(
 ### Output Structure
 
 The function returns a list containing:
+
 - **`alk`**: The complete age-length key(s) with all length bins filled
 - **`interpolation_info`**: Detailed information about what interpolation was performed
 - **`is_sex_specific`**: Logical indicating whether sex-specific keys were used
@@ -448,9 +458,9 @@ result <- calculate_length_compositions(
 print(result)
 ```
 
-## Data Visualization
+## Data Visualisation
 
-The package includes professional plotting capabilities to visualize both **length and age composition** results using **lines with uncertainty ribbons**. Both plotting functions share a consistent interface for ease of use:
+The package includes professional plotting capabilities to visualise both **length and age composition** results using **lines with uncertainty ribbons**. Both plotting functions share a consistent interface for ease of use:
 
 ### Basic Plotting
 
@@ -507,7 +517,7 @@ plot(age_result, unsexed = FALSE) # Same options for age compositions
 plot(age_result, unsexed = TRUE)
 ```
 
-### Advanced Visualization Options
+### Advanced Visualisation Options
 
 ```r
 # By-stratum faceted plot with confidence intervals for length compositions
@@ -573,22 +583,22 @@ plot(age_result,
 
 **Both `plot.length_composition()` and `plot.age_composition()` share identical parameters:**
 
-- **`by_stratum`**: 
+- **`by_stratum`**:
   - `FALSE` - Pooled across strata with separate lines for each sex
   - `TRUE` - Faceted layout (rows = strata, columns = sex categories)
-- **`stratum`**: 
+- **`stratum`**:
   - `NULL` (default) - Use `by_stratum` setting
   - Character string - Plot only the specified stratum (overrides `by_stratum`)
-- **`type`**: 
+- **`type`**:
   - `"composition"` - Absolute scaled compositions (number of fish)
   - `"proportion"` - Relative proportions (0-1 scale)
-- **`show_CIs`**: 
+- **`show_CIs`**:
   - `TRUE` - Display bootstrap confidence interval ribbons (95% CI)
   - `FALSE` - Show only the point estimates (lines without ribbons)
-- **`length_bin_size`** / **`age_bin_size`**: 
+- **`length_bin_size`** / **`age_bin_size`**:
   - `NULL` (default) - Use original 1 cm/1 year bins
   - Numeric value (e.g., 2, 5, 10) - Aggregate data into larger bins
-- **`unsexed`**: 
+- **`unsexed`**:
   - `FALSE` (default) - Exclude unsexed fish category from plots
   - `TRUE` - Include unsexed fish category alongside male, female, and total
 
@@ -598,13 +608,14 @@ The **binning** feature allows aggregation of fine-scale data into larger, more 
 
 - **Flexible bin sizes**: Choose any bin size for both length (e.g., 2 cm, 5 cm) and age (e.g., 2 years, 3 years)
 - **Automatic aggregation**: Compositions and confidence intervals are properly summed across bins
-- **Cleaner visualization**: Reduces noise in data visualization for broader pattern analysis
+- **Cleaner visualisation**: Reduces noise in data visualisation for broader pattern analysis
 - **Compatible with all options**: Works with both pooled and by-stratum plots, confidence intervals, and proportion scaling
 - **Consistent interface**: Same parameter structure for both length (`length_bin_size`) and age (`age_bin_size`) binning
 
-The plotting system generates **line plots with confidence interval ribbons** when bootstrap results are available, providing a clear and professional visualization of uncertainty in both length and age compositions.
+The plotting system generates **line plots with confidence interval ribbons** when bootstrap results are available, providing a clear and professional visualisation of uncertainty in both length and age compositions.
 
 **Key Parameter Updates:**
+
 - **Consistent Interface**: Both `plot.length_composition()` and `plot.age_composition()` use identical parameter names and functionality
 - **`by_stratum`**: Logical (TRUE/FALSE) for faceted by-stratum display
 - **`stratum`**: Character string to plot only a specific stratum (overrides `by_stratum`)
@@ -612,16 +623,16 @@ The plotting system generates **line plots with confidence interval ribbons** wh
 - **`type`**: "composition" (default) or "proportion" for y-axis scaling
 - **Binning parameters**: `length_bin_size` and `age_bin_size` for data aggregation
 - **`unsexed`**: Logical to include/exclude unsexed fish category
-- Removed deprecated parameters from age plotting: `strata`, `sex_categories`, `include_pooled`, `age_bins` 
+- Removed deprecated parameters from age plotting: `strata`, `sex_categories`, `include_pooled`, `age_bins`
 
-### Visualization Features
+### Visualisation Features
 
 - **Lines**: Clean representation of length composition trends
 - **Confidence interval ribbons**: Shaded areas showing 95% bootstrap confidence intervals
 - **Faceted layout**: Professional multi-panel display for comparing strata and sex categories
-- **Color customization**: Flexible theming options for publication-quality figures
+- **Colour customisation**: Flexible theming options for publication-quality figures
 
-### Complete Visualization Example
+### Complete Visualisation Example
 
 ```r
 # Load test data for research surveys
@@ -643,7 +654,7 @@ result <- calculate_length_compositions(
   bootstraps = 300
 )
 
-# Create comprehensive visualizations
+# Create comprehensive visualisations
 library(ggplot2)
 
 # 1. Pooled results with confidence interval ribbons
@@ -737,6 +748,7 @@ specific_stratum <- plot_length_composition_comparison(
 ### Comparison Layout
 
 The comparison plots use a **multi-panel layout**:
+
 - **Rows**: Each element from the input list (e.g., different scenarios/datasets)
 - **Columns**: Sex categories (Male, Female, Total, and optionally Unsexed)
 - **Shared scales**: Consistent x and y axes across all panels for easy comparison
@@ -786,6 +798,7 @@ get_summary(
 #### Return Structure
 
 The function returns a list containing:
+
 - **`mean_weighted_cv`**: Mean weighted coefficient of variation
 - **`n_fish`**: Number of fish sampled by sex category (for pooled data)
 - **`total_fish`**: Total number of fish sampled
@@ -834,11 +847,15 @@ summary_specific <- get_summary(
 #### CV Interpretation
 
 The weighted CV is calculated as:
-$$CV_{weighted} = \frac{\sum_{i} w_i \times CV_i}{\sum_{i} w_i}$$
+
+$$
+CV_{weighted} = \frac{\sum_{i} w_i \times CV_i}{\sum_{i} w_i}
+$$
 
 where $w_i$ are the composition values (weights) and $CV_i$ are the coefficient of variation values at each length bin.
 
 **Typical CV ranges:**
+
 - **CV < 0.20**: Low uncertainty, high precision
 - **CV 0.20-0.40**: Moderate uncertainty
 - **CV > 0.40**: High uncertainty, results should be interpreted with caution
@@ -909,9 +926,9 @@ survey_results <- calculate_length_compositions(
 print(survey_results)
 ```
 
-### Sample Size Distribution Visualization
+### Sample Size Distribution Visualisation
 
-The `plot_sample_size_distribution()` function creates stacked histograms showing the distribution of sample sizes by strata, with samples categorized by adequacy for bootstrap analysis. This visualization helps identify potential issues with bootstrap uncertainty estimation before running analyses.
+The `plot_sample_size_distribution()` function creates stacked histograms showing the distribution of sample sizes by strata, with samples categorised by adequacy for bootstrap analysis. This visualisation helps identify potential issues with bootstrap uncertainty estimation before running analyses.
 
 #### Basic Usage
 
@@ -936,10 +953,10 @@ plot_sample_size_distribution(
 
 #### Sample Categories
 
-The plot uses color coding to show different sample categories:
+The plot uses colour coding to show different sample categories:
 
 - **Non-representative Small** (red): Small samples with poor representativeness (< 20% of total catch)
-- **Representative Small** (amber): Small samples that are highly representative (≥ 20% of total catch)  
+- **Representative Small** (amber): Small samples that are highly representative (≥ 20% of total catch)
 - **Adequate** (green): Samples meeting minimum fish count thresholds (≥ 15 fish by default)
 
 When sample weight data is not available, all small samples are grouped as "Small Samples" since representativeness cannot be assessed.
@@ -959,7 +976,7 @@ for (rec in evaluation$recommendations) {
   cat("-", rec, "\n")
 }
 
-# Step 3: Visualize sample distribution
+# Step 3: Visualise sample distribution
 p <- plot_sample_size_distribution(evaluation)
 
 # Step 4: Filter problematic samples if needed
@@ -968,11 +985,12 @@ if (nrow(evaluation$non_representative_small_samples) > 0) {
   cat("Filtered data contains", nrow(filtered_data), "samples\n")
 }
 
-# Step 5: Save visualization
+# Step 5: Save visualisation
 ggplot2::ggsave("sample_size_distribution.png", p, width = 10, height = 6)
 ```
 
 This workflow helps ensure robust bootstrap uncertainty estimation by:
+
 - Identifying samples with inadequate fish counts
 - Assessing representativeness of small samples when weight data is available
 - Providing visual confirmation of sample size patterns across strata
@@ -1337,16 +1355,18 @@ When sample weight and total catch weight data are available, the function evalu
 **Sample Size Guidelines for Bootstrap Analysis:**
 
 - **Minimum fish per sample**: 15 fish (default) provides stable within-sample resampling
-- **Minimum samples per stratum**: 8 samples (default) provides stable between-sample resampling  
+- **Minimum samples per stratum**: 8 samples (default) provides stable between-sample resampling
 - **Recommended fish per sample**: 20+ fish for critical stock assessment applications
 - **Recommended samples per stratum**: 10+ samples for robust uncertainty estimation
 
 **Consequences of Insufficient Sample Sizes:**
+
 - **Small samples** (< 15 fish): Unreliable within-sample bootstrap distributions
-- **Few strata samples** (< 8): Unstable between-sample bootstrap distributions  
+- **Few strata samples** (< 8): Unstable between-sample bootstrap distributions
 - **Both issues**: Biased variance estimates and unreliable confidence intervals
 
 **Data Quality Recommendations:**
+
 - Run `evaluate_sample_sizes()` before any bootstrap analysis
 - Review specific recommendations provided by the evaluation function
 - Consider filtering only extremely small samples (< 5 fish) that represent minimal data loss
@@ -1357,8 +1377,9 @@ When sample weight and total catch weight data are available, the function evalu
 - Increase to 300+ bootstrap iterations only when sample sizes are adequate
 
 **Decision Framework for Small Sample Handling:**
+
 1. **Assess impact**: Check what percentage of data would be lost
-2. **Review coverage**: Ensure filtering doesn't create spatial/temporal gaps  
+2. **Review coverage**: Ensure filtering doesn't create spatial/temporal gaps
 3. **Test sensitivity**: Compare results with and without filtering
 4. **Document decisions**: Record rationale for inclusion/exclusion choices
 5. **Consider alternatives**: Stratum combination, weighted analysis, or conditional bootstrapping
@@ -1407,7 +1428,7 @@ age_key <- generate_age_length_key(
   cv = 0.25
 )
 
-# Visualize the age-length key
+# Visualise the age-length key
 plot_alk(age_key)
 
 # Convert length compositions to age compositions using complete age-length key
@@ -1526,46 +1547,6 @@ cat("Incomplete key: Only fish with exact length matches allocated\n")
 cat("Missing lengths generate explicit warnings\n")
 ```
 
-### Benefits of the Simplified Workflow
-
-The new approach using `create_alk()` provides several advantages:
-
-**1. Clear Separation of Concerns:**
-- **Data preparation**: `create_alk()` handles all interpolation and validation
-- **Calculation**: `calculate_age_compositions()` focuses on applying complete keys
-- **Better debugging**: Issues are isolated to specific steps
-
-**2. Explicit User Control:**
-- **No silent interpolation**: Users explicitly choose when and how to handle missing data
-- **Clear warnings**: Missing length data is identified with specific warnings
-- **Biological input**: Users can specify realistic age assignments for extreme lengths
-
-**3. Simplified Processing:**
-- **Exact-match application**: Age-length key application uses only exact length matches
-- **Consistent results**: Complete keys ensure all length bins are covered
-- **Better performance**: Pre-processed complete keys are faster to apply repeatedly
-
-**4. Enhanced Validation:**
-- **Comprehensive checks**: Input validation at the data preparation stage
-- **Progress reporting**: Detailed information about interpolation performed
-- **Quality metrics**: Statistics on key completeness and interpolation coverage
-
-```r
-# Example of comprehensive output from create_alk()
-complete_key <- create_alk(limited_age_key, lengths = 20:40, ages = 1:8, verbose = TRUE)
-# Output:
-# Creating complete age-length key...
-# Normalizing age-length key proportions...
-# Age-Length Key Creation Summary:
-# ===============================
-# Total length bins: 21
-# Key type: Single key
-# Missing lengths: 16
-# Interpolation rate: 76.2%
-# Linear interpolation used for 10 lengths
-# Tail extrapolation used for 6 lengths
-```
-
 ## Notes for Real Applications
 
 ### When to Use Each Approach
@@ -1595,25 +1576,20 @@ complete_key <- create_alk(limited_age_key, lengths = 20:40, ages = 1:8, verbose
 
 ## Package Information
 
-**Version**: 2025-07 (automatically updated from git commit date)  
-**Author**: Alistair Dunn  
-**Maintainer**: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>  
-**License**: GPL (>= 3)  
+**Version**: 2025-07 (automatically updated from git commit date)
+**Author**: Alistair Dunn
+**Maintainer**: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>
+**License**: GPL (>= 3)
 **Encoding**: UTF-8
 
 ### Versioning Scheme
 
 The package uses a **year-month (YYYY-MM)** versioning scheme:
+
 - Version number is automatically generated from the git commit date
 - Format: `YYYY-MM` (e.g., `2025-07` for July 2025)
 - Package date is set to the exact commit date (`YYYY-MM-DD`)
 - This ensures version numbers are meaningful and chronologically ordered
-
-**Benefits of Date-Based Versioning:**
-- **Chronological ordering**: Easy to determine which version is newer
-- **Automated updates**: No manual version number management required
-- **Git integration**: Version reflects actual development timeline
-- **Release transparency**: Version immediately shows when code was committed
 
 ## Citation
 
@@ -1626,7 +1602,7 @@ citation("scala")
 
 **Suggested citation:**
 
-Dunn, A. (2025). scala: Calculate scaled catch and length and age compositions. R package version 2025-07. https://github.com/alistairdunn1/scala
+Dunn, A. (2025). scala: Scaled catch at length and age composition analyses. R package version 2025-07. https://github.com/alistairdunn1/scala
 
 ## Contributing
 
@@ -1666,6 +1642,7 @@ build.bat
 ```
 
 This script automatically:
+
 1. **Updates version and date** from git commit information
 2. **Generates documentation** with roxygen2
 3. **Builds the package** with updated version number
@@ -1674,11 +1651,13 @@ This script automatically:
 
 **Manual Version Update:**
 To update version without full build:
+
 ```batch
 update-version.bat
 ```
 
 **View Current Version:**
+
 ```r
 # In R console
 source('show-version.R')
@@ -1691,24 +1670,29 @@ The build process ensures the package version always reflects the actual develop
 ### Common Issues
 
 **Error: "Package not found"**
+
 - Ensure you have built and installed the package correctly
 - Try `devtools::install(".")` from the package directory
 
 **Error: "Length-weight parameters missing"**
+
 - All three sex-specific length-weight parameters are required
 - Use `get_default_lw_params()` for testing purposes
 
 **Error: "Column not found in data"**
+
 - Check that your data has the required column names
 - For weight-based: `sample_weight_kg`, `total_catch_weight_kg`, `stratum_total_catch_kg`
 - For density-based: `sample_area_km2`, `catch_density_kg_km2`, `stratum_area_km2`
 
 **High CVs (> 30%)**
+
 - Increase sample sizes within strata
 - Consider increasing bootstrap iterations (300+ recommended)
 - Review stratification scheme
 
 **Plotting errors**
+
 - Install ggplot2: `install.packages("ggplot2")`
 - Check that results object is valid
 
@@ -1718,23 +1702,3 @@ The build process ensures the package version always reflects the actual develop
 - Check function examples with `example(function_name)`
 - Review the worked examples in this README
 - Submit issues on the GitHub repository for bugs or questions
-
-## Consistent Plotting Interface
-
-Both length and age composition plotting functions now share an identical interface for seamless analysis:
-
-```r
-# Length compositions
-plot(lc_result, by_stratum = FALSE, show_CIs = TRUE)    # Pooled
-plot(lc_result, by_stratum = TRUE, show_CIs = TRUE)     # Faceted
-plot(lc_result, stratum = "North", show_CIs = TRUE)     # Single stratum
-plot(lc_result, length_bin_size = 5, type = "proportion")  # Binned proportions
-
-# Age compositions - same parameters!
-plot(age_result, by_stratum = FALSE, show_CIs = TRUE)   # Pooled
-plot(age_result, by_stratum = TRUE, show_CIs = TRUE)    # Faceted  
-plot(age_result, stratum = "North", show_CIs = TRUE)    # Single stratum
-plot(age_result, age_bin_size = 2, type = "proportion") # Binned proportions
-```
-
-This consistent interface makes it easy to switch between length and age composition analyses while maintaining the same visualization workflow.

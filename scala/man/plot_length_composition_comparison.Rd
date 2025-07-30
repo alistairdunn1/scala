@@ -39,7 +39,7 @@ plot_length_composition_comparison(
 A ggplot object with faceted layout (rows = list elements, columns = sex categories)
 }
 \description{
-Creates a multi-panel ggplot visualization where each row represents a different
+Creates a multi-panel ggplot visualisation where each row represents a different
 length composition result and columns show sex categories.
 }
 \examples{

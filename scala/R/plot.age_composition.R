@@ -3,7 +3,7 @@ utils::globalVariables(c("age", "value", "sex", "ci_lower", "ci_upper", "stratum
 
 #' Plot Method for Age Composition Objects
 #'
-#' Creates visualizations of age composition data with optional uncertainty ribbons.
+#' Creates visualisations of age composition data with optional uncertainty ribbons.
 #'
 #' @param x An age_composition object from calculate_age_compositions()
 #' @param by_stratum Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.

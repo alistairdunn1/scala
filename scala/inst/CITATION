@@ -2,7 +2,7 @@ citHeader("To cite scala in publications, use:")
 
 citEntry(
   entry = "Manual",
-  title = "scala: Calculate scaled catch and length and age compositions",
+  title = "scala: Scaled catch at length and age composition analyses",
   author = person("Alistair", "Dunn", email = "alistair.dunn@OceanEnvironmental.co.nz", role = c("aut", "cre")),
   year = "2025",
   note = "R package version 0.1",

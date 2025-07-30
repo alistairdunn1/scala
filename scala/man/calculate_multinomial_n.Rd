@@ -21,13 +21,13 @@ calculate_multinomial_n(
 \arguments{
 \item{x}{A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()}
 
-\item{stratum}{Character, name of stratum to analyze. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE}
+\item{stratum}{Character, name of stratum to analyse. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE}
 
-\item{sex}{Character, sex category to analyze: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE}
+\item{sex}{Character, sex category to analyse: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE}
 
 \item{all}{Logical, whether to calculate for all combinations of strata and sex categories (default FALSE)}
 
-\item{sex_categories}{Character vector of sex categories to analyze when all = TRUE. Default: c("male", "female", "unsexed", "total")}
+\item{sex_categories}{Character vector of sex categories to analyse when all = TRUE. Default: c("male", "female", "unsexed", "total")}
 
 \item{include_pooled}{Logical, whether to include pooled results when all = TRUE (default TRUE)}
 
@@ -62,7 +62,7 @@ When all = FALSE: Named list containing:
 }
 \description{
 Calculates the multinomial effective sample size from length or age composition proportions and
-their coefficients of variation. Can analyze a single combination or all combinations of strata and sex categories.
+their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
 }
 \details{
 The function fits a nonlinear model based on the multinomial distribution relationship:

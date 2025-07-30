@@ -36,5 +36,5 @@
 A ggplot object
 }
 \description{
-Creates visualizations of age composition data with optional uncertainty ribbons.
+Creates visualisations of age composition data with optional uncertainty ribbons.
 }

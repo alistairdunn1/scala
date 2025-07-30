@@ -3,7 +3,7 @@ utils::globalVariables(c("length_bin", "composition", "sex", "ci_lower", "ci_upp
 
 #' Plot method for length composition objects
 #'
-#' Creates ggplot visualizations of length composition results.
+#' Creates ggplot visualisations of length composition results.
 #'
 #' @param x An object of class \code{length_composition}
 #' @param by_stratum Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.

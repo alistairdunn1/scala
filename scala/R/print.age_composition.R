@@ -367,7 +367,7 @@ print.age_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digits 
     }
   }
 
-  cat("Use plot(x) to visualize age compositions\n")
+  cat("Use plot(x) to visualise age compositions\n")
   if (!is.null(x$n_bootstraps) && x$n_bootstraps > 0) {
     cat("Use calculate_multinomial_n(x) to estimate effective sample sizes\n")
   }

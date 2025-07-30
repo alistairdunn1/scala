@@ -1,6 +1,6 @@
 #' Plot alk (Age-Length Key)
 #'
-#' Creates a heatmap visualization of the age-length key showing
+#' Creates a heatmap visualisation of the age-length key showing
 #' the probability distribution of ages for each length.
 #'
 #' @param alk Age-length key data frame

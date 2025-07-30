@@ -37,7 +37,7 @@ with bars categorized by sample adequacy: non-representative small samples,
 representative small samples, and adequate samples.
 }
 \details{
-This function visualizes the output from \code{\link{evaluate_sample_sizes}} as a
+This function visualises the output from \code{\link{evaluate_sample_sizes}} as a
 stacked histogram, making it easy to see:
 \itemize{
   \item The distribution of sample sizes across strata

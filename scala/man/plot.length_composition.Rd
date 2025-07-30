@@ -36,5 +36,5 @@
 A ggplot object
 }
 \description{
-Creates ggplot visualizations of length composition results.
+Creates ggplot visualisations of length composition results.
 }

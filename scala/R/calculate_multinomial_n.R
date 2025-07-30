@@ -1,13 +1,13 @@
 #' Calculate Multinomial Effective Sample Size
 #'
 #' Calculates the multinomial effective sample size from length or age composition proportions and
-#' their coefficients of variation. Can analyze a single combination or all combinations of strata and sex categories.
+#' their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
 #'
 #' @param x A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()
-#' @param stratum Character, name of stratum to analyze. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE
-#' @param sex Character, sex category to analyze: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE
+#' @param stratum Character, name of stratum to analyse. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE
+#' @param sex Character, sex category to analyse: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE
 #' @param all Logical, whether to calculate for all combinations of strata and sex categories (default FALSE)
-#' @param sex_categories Character vector of sex categories to analyze when all = TRUE. Default: c("male", "female", "unsexed", "total")
+#' @param sex_categories Character vector of sex categories to analyse when all = TRUE. Default: c("male", "female", "unsexed", "total")
 #' @param include_pooled Logical, whether to include pooled results when all = TRUE (default TRUE)
 #' @param remove_outliers Numeric, proportion of outliers to remove (0-1). Default 0.05 removes worst 5 percent of fits
 #' @param min_proportion Numeric, minimum proportion threshold to include in analysis (default 0.0001)
@@ -177,10 +177,10 @@ calculate_all_combinations_internal <- function(x, sex_categories, include_poole
                                                 remove_outliers, min_proportion, max_cv, quiet) {
   results_list <- list()
 
-  # Get list of strata to analyze
-  strata_to_analyze <- if (include_pooled) c("Pooled", x$strata_names) else x$strata_names
+  # Get list of strata to analyse
+  strata_to_analyse <- if (include_pooled) c("Pooled", x$strata_names) else x$strata_names
 
-  for (stratum in strata_to_analyze) {
+  for (stratum in strata_to_analyse) {
     for (sex in sex_categories) {
       tryCatch(
         {
@@ -235,7 +235,7 @@ calculate_all_combinations_internal <- function(x, sex_categories, include_poole
   rownames(final_results) <- NULL
 
   # Order by stratum then sex
-  final_results$stratum <- factor(final_results$stratum, levels = strata_to_analyze)
+  final_results$stratum <- factor(final_results$stratum, levels = strata_to_analyse)
   final_results$sex <- factor(final_results$sex, levels = sex_categories)
   final_results <- final_results[order(final_results$stratum, final_results$sex), ]
 

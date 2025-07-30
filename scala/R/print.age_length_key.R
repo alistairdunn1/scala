@@ -13,7 +13,7 @@ print.age_length_key <- function(x, ...) {
     cat("Rows:", nrow(x), "\n")
     cat("Columns:", ncol(x), "\n")
 
-    # Analyze length coverage
+    # Analyse length coverage
     if ("length" %in% names(x)) {
       lengths_in_key <- unique(x$length)
       length_range <- range(lengths_in_key)
@@ -43,7 +43,7 @@ print.age_length_key <- function(x, ...) {
     cat("Type: Sex-specific age-length keys\n")
     cat("Sex categories:", paste(names(x), collapse = ", "), "\n")
 
-    # Analyze each sex-specific key
+    # Analyse each sex-specific key
     all_missing_lengths <- list()
     all_length_ranges <- list()
 
