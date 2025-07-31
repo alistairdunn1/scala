@@ -7,6 +7,3 @@
 Functions to detect and correct length measurement bias (rounding/heaping)
 in fisheries data, particularly preference for lengths divisible by 5.
 }
-\author{
-Scala Package Team
-}

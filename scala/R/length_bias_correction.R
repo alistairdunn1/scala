@@ -3,12 +3,10 @@
 #' Functions to detect and correct length measurement bias (rounding/heaping)
 #' in fisheries data, particularly preference for lengths divisible by 5.
 #'
-#' @author Scala Package Team
-#'
 #' @name length_bias_correction
 #' @aliases length_bias_correction
 #'
-#' @importFrom dplyr %>% count arrange mutate left_join select rename group_by ungroup
+#' @importFrom dplyr "%>%" count arrange mutate left_join select rename group_by ungroup
 #' @importFrom zoo rollmean
 #' @importFrom stats chisq.test ecdf quantile runif
 #' @importFrom graphics hist plot abline legend boxplot lines par
@@ -320,11 +318,11 @@ correct_length_bias <- function(fish_data,
 
     cat(
       "- Preference ratio: ", round(original_bias$preference_ratio, 2),
-      " → ", round(corrected_bias$preference_ratio, 2), "\n"
+      " -> ", round(corrected_bias$preference_ratio, 2), "\n"
     )
     cat(
       "- Bias severity: ", original_bias$bias_severity,
-      " → ", corrected_bias$bias_severity, "\n"
+      " -> ", corrected_bias$bias_severity, "\n"
     )
   }
 

@@ -19,11 +19,6 @@ if errorlevel 1 (
 
 rem Generate documentation with roxygen2
 echo Generating documentation...
-R.exe --vanilla --slave -e "source('run-roxygen.R')"
-if errorlevel 1 exit /b 1
-
-rem Generate documentation with roxygen2
-echo Generating documentation...
 call R --vanilla < run-roxygen.R
 if errorlevel 1 exit /b 1
 

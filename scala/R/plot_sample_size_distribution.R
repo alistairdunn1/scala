@@ -1,6 +1,3 @@
-# Global variables for R CMD check
-utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
-
 #' Plot Sample Size Distribution by Strata
 #'
 #' Creates a stacked histogram showing the distribution of sample sizes by strata,
@@ -13,7 +10,6 @@ utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
 #' @param max_fish Numeric, maximum number of fish to display on x-axis.
 #'   If NULL (default), uses the maximum observed sample size.
 #' @param min_fish Numeric, minimum number of fish to display on x-axis (default: 0).
-#' @param title Character, plot title. If NULL (default), generates automatic title.
 #' @param show_thresholds Logical, whether to show vertical lines indicating
 #'   minimum sample size thresholds (default: TRUE).
 #'
@@ -65,6 +61,10 @@ utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
 #'   facet_wrap labs theme_minimal theme element_text guides guide_legend
 #' @importFrom dplyr mutate case_when
 #' @export
+
+# Global variables for R CMD check
+utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
+
 plot_sample_size_distribution <- function(evaluation_result,
                                           bin_width = 5,
                                           max_fish = NULL,
