@@ -4,17 +4,23 @@
 \alias{plot_alk}
 \title{Plot alk (Age-Length Key)}
 \usage{
-plot_alk(alk, by_sex = TRUE)
+plot_alk(alk, by_sex = TRUE, type = "heatmap", rug = FALSE)
 }
 \arguments{
 \item{alk}{Age-length key data frame}
 
 \item{by_sex}{Logical, whether to plot by sex (default TRUE)}
+
+\item{type}{Character, type of plot: "heatmap" for heatmap visualization
+or "points" for point plot (default "heatmap")}
+
+\item{rug}{Logical, whether to add a rug plot on the y-axis showing length distribution (default FALSE)}
 }
 \value{
 ggplot2 object
 }
 \description{
-Creates a heatmap visualisation of the age-length key showing
-the probability distribution of ages for each length.
+Creates a visualisation of the age-length key showing
+the probability distribution of ages for each length, with
+ages on the x-axis and lengths on the y-axis.
 }

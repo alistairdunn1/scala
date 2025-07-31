@@ -155,13 +155,13 @@ create_alk <- function(age_data,
         by = list(length = sex_data$length, age = sex_data$age),
         FUN = sum
       )
-      names(counts)[3] <- "count"
+      names(counts)[3] <- "n"
 
       # Calculate proportions by length
-      counts$proportion <- ave(counts$count, counts$length, FUN = function(x) x / sum(x))
+      counts$proportion <- ave(counts$n, counts$length, FUN = function(x) x / sum(x))
 
-      # Keep only the columns needed for ALK
-      age_length_key[[sex_cat]] <- counts[, c("length", "age", "proportion")]
+      # Keep the columns needed for ALK including n
+      age_length_key[[sex_cat]] <- counts[, c("length", "age", "proportion", "n")]
     }
 
     # Create combined unsexed key (males + females)
@@ -171,8 +171,8 @@ create_alk <- function(age_data,
       # Combine all sex-specific data
       combined_data <- do.call(rbind, age_length_key)
 
-      # Aggregate by length and age, summing proportions
-      combined_counts <- aggregate(proportion ~ length + age, data = combined_data, sum)
+      # Aggregate by length and age, summing both proportions and counts
+      combined_counts <- aggregate(cbind(proportion, n) ~ length + age, data = combined_data, sum)
 
       # Normalise proportions to sum to 1 for each length
       combined_counts$proportion <- ave(combined_counts$proportion, combined_counts$length,
@@ -191,13 +191,13 @@ create_alk <- function(age_data,
       by = list(length = age_data$length, age = age_data$age),
       FUN = sum
     )
-    names(counts)[3] <- "count"
+    names(counts)[3] <- "n"
 
     # Calculate proportions by length
-    counts$proportion <- ave(counts$count, counts$length, FUN = function(x) x / sum(x))
+    counts$proportion <- ave(counts$n, counts$length, FUN = function(x) x / sum(x))
 
-    # Keep only the columns needed for ALK
-    age_length_key <- counts[, c("length", "age", "proportion")]
+    # Keep the columns needed for ALK including n
+    age_length_key <- counts[, c("length", "age", "proportion", "n")]
     is_sex_specific <- FALSE
   }
 
@@ -271,6 +271,7 @@ create_alk <- function(age_data,
                   length = missing_length,
                   age = matching_row$age[i],
                   proportion = 1.0,
+                  n = 0, # No actual otoliths for user-specified entries
                   stringsAsFactors = FALSE
                 )
                 complete_key <- rbind(complete_key, new_row)
@@ -293,6 +294,7 @@ create_alk <- function(age_data,
                   length = missing_length,
                   age = matching_row$age[i],
                   proportion = 1.0,
+                  n = 0, # No actual otoliths for user-specified entries
                   stringsAsFactors = FALSE
                 )
                 complete_key <- rbind(complete_key, new_row)
@@ -319,6 +321,7 @@ create_alk <- function(age_data,
                 length = missing_length,
                 age = nearest_data$age[i],
                 proportion = nearest_data$proportion[i],
+                n = 0, # No actual otoliths for extrapolated entries
                 stringsAsFactors = FALSE
               )
               complete_key <- rbind(complete_key, new_row)
@@ -336,6 +339,7 @@ create_alk <- function(age_data,
                 length = missing_length,
                 age = nearest_data$age[i],
                 proportion = nearest_data$proportion[i],
+                n = 0, # No actual otoliths for extrapolated entries
                 stringsAsFactors = FALSE
               )
               complete_key <- rbind(complete_key, new_row)
@@ -374,6 +378,7 @@ create_alk <- function(age_data,
                   length = missing_length,
                   age = age,
                   proportion = interpolated_prop,
+                  n = 0, # No actual otoliths for interpolated entries
                   stringsAsFactors = FALSE
                 )
                 complete_key <- rbind(complete_key, new_row)
