@@ -205,7 +205,7 @@ The package provides the following main functions:
 
 - **`calculate_length_compositions()`**: Main function for calculating length compositions with optional bootstrap uncertainty estimation
 - **`calculate_age_compositions()`**: Convert length compositions to age compositions using age-length keys with **smart detection** for complete vs incomplete keys and **warning system** for missing length data
-- **`create_alk()`**: Create complete age-length keys with interpolation/extrapolation for missing length-age combinations, supporting both single and sex-specific keys
+- **`create_alk()`**: Create complete age-length keys from raw age data with interpolation/extrapolation for missing length-age combinations, supporting both single and sex-specific keys, length binning, and comprehensive sampling requirement analysis
 - **`evaluate_sample_sizes()`**: Evaluate whether sample sizes are adequate for reliable bootstrap uncertainty estimation by checking fish per sample and samples per stratum against recommended thresholds
 - **`filter_small_samples()`**: Create filtered datasets by excluding specific samples identified by sample evaluation (simplified interface)
 - **`generate_test_data()`**: Generate sample datasets for testing and examples
@@ -294,41 +294,129 @@ For detailed documentation of any function, use `?function_name` in R (e.g., `?c
 
 ## Creating Complete Age-Length Keys
 
-The `create_alk()` function addresses a common problem in fisheries analysis: incomplete age-length keys that don't cover all length bins present in the length composition data.
+The `create_alk()` function provides a comprehensive solution for creating complete age-length keys from raw age data, addressing common problems in fisheries analysis where age-length coverage is incomplete or sparse.
 
 ### Key Features
 
-- **Interpolation/Extrapolation**: Automatically fills gaps in age-length keys using linear interpolation between known points and extrapolation at the tails
-- **Sex-Specific Support**: Handles both single keys and sex-specific keys (male, female, unsexed)
+- **Raw Data Input**: Takes raw age-length data (one row per aged fish) rather than pre-processed age-length keys
+- **Automatic Key Creation**: Converts raw data to proportional age-length keys with comprehensive interpolation/extrapolation
+- **Length Binning**: Optional binning of length data (e.g., 2cm or 5cm bins) to consolidate sparse data
+- **Interpolation Control**: Optional linear interpolation between observed length bins
+- **Extrapolation Control**: Optional extrapolation beyond the observed length range  
+- **Sex-Specific Support**: Handles male, female, and combined unsexed keys automatically
+- **Sampling Analysis**: Calculates current otolith counts and additional requirements for minimum (3 per length bin) and optimum (10 per length bin) coverage
 - **User-Specified Tails**: Optional specification of age assignments for extreme lengths
 - **Comprehensive Validation**: Extensive input validation and progress reporting
-- **Smart Normalization**: Ensures age proportions sum to 1.0 within each length bin
+- **Smart Normalisation**: Ensures age proportions sum to 1.0 within each length bin
+
+The default optimum target of 10 otoliths per length bin is based on simulation studies showing this provides reliable age composition estimates (Coggins et al., 2013).
+
+### Interpolation and Extrapolation Algorithms
+
+The `create_alk()` function uses sophisticated algorithms to fill missing length-age combinations, applied in priority order:
+
+#### 1. User-Specified Tail Ages (Highest Priority)
+User-defined length-age pairs are applied first for extreme lengths:
+- Applied to lengths at or beyond the observed data range
+- Takes precedence over automatic interpolation/extrapolation
+- Allows expert knowledge to override automatic methods
+
+#### 2. Linear Interpolation (Between Observed Data)
+For missing lengths that fall **between** observed data points:
+- **Method**: Distance-weighted linear interpolation
+- **Calculation**: `interpolated_prop = weight_lower × lower_prop + weight_upper × upper_prop`
+- **Weights**: Based on distance from bracketing lengths
+- **Assumption**: Age composition changes gradually between observed lengths
+
+**Example**: 
+- Observed: Length 20 (Age 2: 60%, Age 3: 40%), Length 24 (Age 2: 30%, Age 3: 70%)
+- Missing: Length 22 (halfway between)
+- Result: Length 22 gets (Age 2: 45%, Age 3: 55%)
+
+#### 3. Constant Extrapolation (Beyond Observed Range)
+For missing lengths **outside** the observed data range:
+- **Method**: Copy age proportions from nearest observed length
+- **Lower tail**: Copy from smallest observed length
+- **Upper tail**: Copy from largest observed length
+- **Assumption**: Age composition remains constant beyond observed range
+
+**Example**:
+- Observed range: Lengths 22-28
+- Missing length 20: Copies all proportions from length 22
+- Missing length 30: Copies all proportions from length 28
+
+#### Algorithm Priority and Control
+The algorithms are applied in this order for each missing length:
+1. Check for user-specified tail ages → if found, use exact specification
+2. If not found and length is between observed data → use linear interpolation (if enabled)
+3. If not found and length is beyond observed range → use constant extrapolation (if enabled)
+4. If disabled, the length remains unfilled (user must handle manually)
+
+This hierarchical approach ensures expert knowledge takes precedence while providing robust automatic methods for routine data gaps.
 
 ### Basic Usage
 
 ```r
-# For a simple age-length key that's missing some lengths
+# Create age data frame (one row per aged fish)
+age_data <- data.frame(
+  age = c(2, 3, 3, 4, 4, 4, 5, 5, 6),
+  length = c(22, 25, 26, 28, 29, 30, 32, 33, 35),
+  sex = c("male", "male", "female", "male", "female", "male", "female", "male", "female")
+)
+
+# Create complete age-length key from raw data
 complete_alk <- create_alk(
-  age_length_key = my_incomplete_key,
-  lengths = 15:45,        # All lengths in your length composition data
-  ages = 1:10,           # All ages you want to include
-  verbose = TRUE         # Show progress and interpolation summary
+  age_data = age_data,
+  lengths = 20:40,           # All lengths in your length composition data
+  ages = 1:8,               # All ages you want to include
+  verbose = TRUE            # Show progress and interpolation summary
 )
 
 # Use the complete key in age composition calculation
 age_results <- calculate_age_compositions(
   x = length_composition_results,
   age_length_key = complete_alk,
-  age_range = c(1, 10)
+  age_range = c(1, 8)
 )
 ```
 
-### Advanced Usage with Tail Specification
+### Advanced Usage with Length Binning and Controls
+
+```r
+# Use length binning and control interpolation/extrapolation
+complete_alk <- create_alk(
+  age_data = age_data,
+  lengths = 20:40,
+  ages = 1:8,
+  length_bin_size = 2,           # Use 2cm length bins
+  interpolate = TRUE,            # Allow linear interpolation (default)
+  extrapolate = FALSE,           # Disable extrapolation beyond observed range
+  min_ages_per_length = 5,       # Minimum otoliths per length bin
+  optimum_ages_per_length = 15,  # Optimum otoliths per length bin
+  verbose = TRUE
+)
+```
+
+### Sampling Requirement Analysis
+
+The function provides detailed analysis of current sampling coverage and additional requirements:
+
+```r
+# The summary table shows for each sex category:
+# - missing_lengths: Number of length bins requiring interpolation/extrapolation
+# - interpolation_rate: Percentage of length bins requiring linear interpolation
+# - extrapolation_rate: Percentage requiring extrapolation beyond observed range  
+# - current_otoliths: Number of aged fish currently available
+# - min_additional_required: Additional otoliths needed for minimum coverage (3 per length)
+# - optimum_additional_required: Additional otoliths needed for optimum coverage (10 per length)
+```
+
+### Usage with Tail Specification
 
 ```r
 # Specify ages for extreme lengths that might not interpolate well
 complete_alk <- create_alk(
-  age_length_key = my_incomplete_key,
+  age_data = age_data,
   lengths = 15:45,
   ages = 1:10,
   tail_ages = list(
@@ -339,40 +427,13 @@ complete_alk <- create_alk(
 )
 ```
 
-### Sex-Specific Keys
-
-```r
-# For sex-specific age-length keys
-sex_specific_keys <- list(
-  male = male_age_key,
-  female = female_age_key
-  # unsexed key automatically uses male key if not provided
-)
-
-complete_alk <- create_alk(
-  age_length_key = sex_specific_keys,
-  lengths = 15:45,
-  ages = 1:10,
-  verbose = TRUE
-)
-```
-
-### Output Structure
-
-The function returns a list containing:
-
-- **`alk`**: The complete age-length key(s) with all length bins filled
-- **`interpolation_info`**: Detailed information about what interpolation was performed
-- **`is_sex_specific`**: Logical indicating whether sex-specific keys were used
-
 ### Integration with calculate_age_compositions()
 
 The `calculate_age_compositions()` function automatically detects complete age-length keys created by `create_alk()` and processes them efficiently:
 
 ```r
-# Complete workflow
-incomplete_key <- generate_age_length_key(length_range = c(20, 30), age_range = c(2, 6))
-complete_key <- create_alk(incomplete_key, lengths = 15:35, ages = 1:8)
+# Complete workflow with raw age data
+complete_key <- create_alk(age_data, lengths = 15:35, ages = 1:8)
 age_results <- calculate_age_compositions(lc_results, complete_key, age_range = c(1, 8))
 ```
 
@@ -1492,12 +1553,12 @@ cat("Length compositions: 20-40 cm\n")
 cat("Age-length key: 30-35 cm\n")
 cat("Gaps: 20-29 cm and 36-40 cm need interpolation\n")
 
-# Step 1: Create complete age-length key with interpolation
+# Step 1: Create complete age-length key from raw age data with interpolation
 complete_age_key <- create_alk(
-  age_length_key = limited_age_key,
-  lengths = 20:40,          # Full length range in composition data
-  ages = 1:8,               # Full age range desired
-  verbose = TRUE            # Show interpolation details
+  age_data = age_sample_data,    # Raw age data (one row per aged fish)
+  lengths = 20:40,               # Full length range in composition data
+  ages = 1:8,                    # Full age range desired
+  verbose = TRUE                 # Show interpolation details
 )
 
 # Step 2: Use complete key for age composition calculation
@@ -1520,7 +1581,7 @@ tail_ages <- list(
 )
 
 complete_age_key_tails <- create_alk(
-  age_length_key = limited_age_key,
+  age_data = age_sample_data,
   lengths = 20:40,
   ages = 1:8,
   tail_ages = tail_ages,
@@ -1590,6 +1651,10 @@ The package uses a **year-month (YYYY-MM)** versioning scheme:
 - Format: `YYYY-MM` (e.g., `2025-07` for July 2025)
 - Package date is set to the exact commit date (`YYYY-MM-DD`)
 - This ensures version numbers are meaningful and chronologically ordered
+
+## References
+
+Coggins, L.G.; Gwinn, D.C.; Allen, M.S. (2013). Evaluation of Age–Length Key Sample Sizes Required to Estimate Fish Total Mortality and Growth. *Transactions of the American Fisheries Society*, 142(3), 832–840. https://doi.org/10.1080/00028487.2013.768550
 
 ## Citation
 

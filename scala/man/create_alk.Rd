@@ -4,17 +4,40 @@
 \alias{create_alk}
 \title{Create Complete Age-Length Key}
 \usage{
-create_alk(age_length_key, lengths, ages, tail_ages = NULL, verbose = TRUE)
+create_alk(
+  age_data,
+  lengths,
+  ages,
+  tail_ages = NULL,
+  min_ages_per_length = 3,
+  optimum_ages_per_length = 10,
+  length_bin_size = NULL,
+  interpolate = TRUE,
+  extrapolate = TRUE,
+  verbose = TRUE
+)
 }
 \arguments{
-\item{age_length_key}{Either a single data frame or named list of sex-specific keys}
+\item{age_data}{Data frame containing age-length data with required columns:
+'age', 'length', and optionally 'sex'. Each row represents one aged fish.}
 
-\item{lengths}{Vector of all length bins that will be encountered}
+\item{lengths}{Vector of all length bins that will be encountered (required)}
 
-\item{ages}{Vector of all age bins}
+\item{ages}{Vector of all age bins (required)}
 
 \item{tail_ages}{Named list specifying length-age pairs for lengths at tails
 Format: list(min_lengths = data.frame(length, age), max_lengths = data.frame(length, age))}
+
+\item{min_ages_per_length}{Minimum number of ages required per length bin (default: 3)}
+
+\item{optimum_ages_per_length}{Optimum number of ages per length bin (default: 10)}
+
+\item{length_bin_size}{Numeric value for binning lengths (e.g., 2 for 2cm bins, 5 for 5cm bins).
+If NULL (default), uses raw length values without binning.}
+
+\item{interpolate}{Logical, whether to allow linear interpolation for missing length bins (default: TRUE)}
+
+\item{extrapolate}{Logical, whether to allow extrapolation for lengths outside the observed range (default: TRUE)}
 
 \item{verbose}{Logical, whether to print progress messages}
 }
@@ -23,7 +46,7 @@ Age-length key object (data.frame for single key, named list for sex-specific ke
   with interpolation information stored as attributes:
   \itemize{
     \item Standard age-length key format compatible with calculate_age_compositions()
-    \item \code{attr(*, "interpolation_info")}: Data frame summarizing interpolation methods used
+    \item \code{attr(*, "interpolation_info")}: Data frame summarising interpolation methods used
     \item \code{attr(*, "is_sex_specific")}: Logical indicating if sex-specific keys were used
   }
 }
@@ -33,21 +56,33 @@ with interpolation/extrapolation as needed for missing combinations.
 }
 \examples{
 \dontrun{
+# Create age data frame
+age_data <- data.frame(
+  age = c(1, 2, 2, 3, 3, 3, 4, 4, 5),
+  length = c(20, 22, 23, 25, 26, 27, 29, 30, 32),
+  sex = c("male", "male", "female", "male", "female", "male", "female", "male", "female")
+)
+
 # Create a complete age-length key
 complete_alk <- create_alk(
-  age_length_key = my_age_key,
-  lengths = 20:40,
-  ages = 1:8,
+  age_data = age_data,
+  lengths = 20:35,
+  ages = 1:6,
   tail_ages = list(
     min_lengths = data.frame(length = c(18, 19), age = c(1, 1)),
-    max_lengths = data.frame(length = c(41, 42), age = c(8, 8))
-  )
+    max_lengths = data.frame(length = c(36, 37), age = c(6, 6))
+  ),
+  min_ages_per_length = 5,
+  optimum_ages_per_length = 200,
+  length_bin_size = 2, # Use 2cm length bins
+  interpolate = TRUE, # Allow linear interpolation
+  extrapolate = FALSE # Disable extrapolation beyond observed range
 )
 
 # Use directly in age composition calculation
 age_results <- calculate_age_compositions(
   x = length_compositions,
-  age_length_key = complete_alk # Now works directly
+  age_length_key = complete_alk
 )
 
 # Check interpolation information
