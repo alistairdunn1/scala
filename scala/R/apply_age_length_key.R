@@ -1,9 +1,7 @@
-#' Apply Age-Length Key to Length Compositions (Simplified)
-#'
-#' Internal function to convert length compositions to age compositions using age-length key.
-#' This simplified version only uses exact length matches - no interpolation.
-#' For complete ALK with interpolation, use create_alk() first.
-#'
+#' @title Apply Age-Length Key to Length Compositions (Simplified)
+#' @description Internal function to convert length compositions to age compositions using age-length key.
+#'   This simplified version only uses exact length matches - no interpolation.
+#'   For complete ALK with interpolation, use create_alk() first.
 #' @param length_comp 3D array of length compositions (length x sex x stratum)
 #' @param age_length_key Either a single data frame or a named list of sex-specific data frames
 #' @param ages Vector of age bins
@@ -11,7 +9,6 @@
 #' @param plus_group_age Logical, whether to apply plus group for ages
 #' @param minus_group_age Logical, whether to apply minus group for ages
 #' @param sex_specific_keys Logical, whether sex-specific keys are being used
-#'
 #' @return List containing:
 #'   \itemize{
 #'     \item \code{age_compositions}: 3D array of age compositions (age x sex x stratum)

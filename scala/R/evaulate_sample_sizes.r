@@ -1,9 +1,8 @@
-#' Evaluate Sample Sizes for Bootstrap Analysis
-#'
-#' Evaluates whether the sample sizes in fisheries data are adequate for reliable
-#' bootstrap uncertainty estimation. This function checks both the number of fish
-#' per sample and the number of samples per stratum against recommended minimum
-#' thresholds for hierarchical bootstrap resampling.
+#' @title Evaluate Sample Sizes for Bootstrap Analysis
+#' @description Evaluates whether the sample sizes in fisheries data are adequate for reliable
+#'   bootstrap uncertainty estimation. This function checks both the number of fish
+#'   per sample and the number of samples per stratum against recommended minimum
+#'   thresholds for hierarchical bootstrap resampling.
 #'
 #' @param fish_data A data frame containing fisheries sampling data with columns:
 #'   \describe{

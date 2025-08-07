@@ -1,9 +1,10 @@
-#' Plot Sample Size Distribution by Strata
-#'
-#' Creates a stacked histogram showing the distribution of sample sizes by strata,
-#' with bars categorized by sample adequacy: non-representative small samples,
-#' representative small samples, and adequate samples.
-#'
+# Global variables for R CMD check
+utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
+
+#' @title Plot Sample Size Distribution by Strata
+#' @description Creates a stacked histogram showing the distribution of sample sizes by strata,
+#'   with bars categorized by sample adequacy: non-representative small samples,
+#'   representative small samples, and adequate samples.
 #' @param evaluation_result A list returned by \code{\link{evaluate_sample_sizes}}
 #'   containing sample size evaluation results.
 #' @param bin_width Numeric, width of bins for the histogram (default: 5 fish).
@@ -12,9 +13,7 @@
 #' @param min_fish Numeric, minimum number of fish to display on x-axis (default: 0).
 #' @param show_thresholds Logical, whether to show vertical lines indicating
 #'   minimum sample size thresholds (default: TRUE).
-#'
 #' @return A ggplot object showing the stacked histogram of sample sizes by strata.
-#'
 #' @details
 #' This function visualises the output from \code{\link{evaluate_sample_sizes}} as a
 #' stacked histogram, making it easy to see:
@@ -54,17 +53,11 @@
 #' # Plot without threshold lines
 #' plot_sample_size_distribution(evaluation, show_thresholds = FALSE)
 #' }
-#'
 #' @seealso \code{\link{evaluate_sample_sizes}} for evaluating sample adequacy
-#'
 #' @importFrom ggplot2 ggplot aes geom_histogram geom_vline scale_fill_manual
 #'   facet_wrap labs theme_minimal theme element_text guides guide_legend
 #' @importFrom dplyr mutate case_when
 #' @export
-
-# Global variables for R CMD check
-utils::globalVariables(c("total", "sample_category", "sample_id", "stratum"))
-
 plot_sample_size_distribution <- function(evaluation_result,
                                           bin_width = 5,
                                           max_fish = NULL,

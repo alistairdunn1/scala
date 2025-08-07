@@ -1,10 +1,8 @@
 # Global variables for R CMD check
 utils::globalVariables(c("age", "value", "sex", "ci_lower", "ci_upper", "stratum"))
 
-#' Plot Method for Age Composition Objects
-#'
-#' Creates visualisations of age composition data with optional uncertainty ribbons.
-#'
+#' @title Plot Method for Age Composition Objects
+#' @description Creates visualisations of age composition data with optional uncertainty ribbons.
 #' @param x An age_composition object from calculate_age_compositions()
 #' @param by_stratum Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.
 #' @param stratum Character, name of a specific stratum to plot. If provided, only that stratum is plotted (overrides by_stratum). Default is NULL.
@@ -13,9 +11,7 @@ utils::globalVariables(c("age", "value", "sex", "ci_lower", "ci_upper", "stratum
 #' @param age_bin_size Numeric, size of age bins for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.
 #' @param unsexed Logical, whether to include unsexed fish category in the plot. Default is FALSE.
 #' @param ... Additional arguments (not used)
-#'
 #' @return A ggplot object
-#'
 #' @importFrom ggplot2 ggplot aes geom_line geom_ribbon scale_colour_manual scale_fill_manual facet_grid labs ylim
 #' @importFrom tools toTitleCase
 #' @export

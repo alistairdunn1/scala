@@ -1,8 +1,6 @@
-#' Calculate Multinomial Effective Sample Size
-#'
-#' Calculates the multinomial effective sample size from length or age composition proportions and
-#' their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
-#'
+#' @title Calculate Multinomial Effective Sample Size
+#' @description Calculates the multinomial effective sample size from length or age composition proportions and
+#'   their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
 #' @param x A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()
 #' @param stratum Character, name of stratum to analyse. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE
 #' @param sex Character, sex category to analyse: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE
@@ -14,9 +12,7 @@
 #' @param max_cv Numeric, maximum CV threshold to include in analysis (default 5.0)
 #' @param trace Logical, whether to show fitting details (default FALSE)
 #' @param quiet Logical, whether to suppress individual fitting messages when all = TRUE (default TRUE)
-#'
 #' @importFrom stats nls coef quantile
-#'
 #' @return When all = FALSE: Named list containing:
 #'   \itemize{
 #'     \item \code{effective_n}: The estimated multinomial effective sample size
@@ -34,7 +30,6 @@
 #'     \item \code{n_bins}: Number of length or age bins used
 #'     \item \code{fit_quality}: Model fit quality (residual standard error)
 #'   }
-#'
 #' @details
 #' The function fits a nonlinear model based on the multinomial distribution relationship:
 #' CV = sqrt(n * P * (1 - P)) / (n * P)

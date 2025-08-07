@@ -49,9 +49,9 @@ A list containing:
 }
 \description{
 Evaluates whether the sample sizes in fisheries data are adequate for reliable
-bootstrap uncertainty estimation. This function checks both the number of fish
-per sample and the number of samples per stratum against recommended minimum
-thresholds for hierarchical bootstrap resampling.
+  bootstrap uncertainty estimation. This function checks both the number of fish
+  per sample and the number of samples per stratum against recommended minimum
+  thresholds for hierarchical bootstrap resampling.
 }
 \details{
 Hierarchical bootstrap resampling requires adequate sample sizes at both levels:

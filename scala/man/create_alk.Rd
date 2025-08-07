@@ -52,7 +52,7 @@ Age-length key object (data.frame for single key, named list for sex-specific ke
 }
 \description{
 Creates a complete age-length key that includes all required length and age bins,
-with interpolation/extrapolation as needed for missing combinations.
+  with interpolation/extrapolation as needed for missing combinations.
 }
 \examples{
 \dontrun{

@@ -1,8 +1,6 @@
-#' Calculate Length Compositions with Optional Bootstrap Uncertainty (Sex-Based)
-#'
-#' Calculates length compositions for fish data by sex and stratum, applying upweighting and optionally bootstrap resampling to estimate uncertainty.
-#' Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
-#'
+#' @title Calculate Length Compositions with Optional Bootstrap Uncertainty (Sex-Based)
+#' @description Calculates length compositions for fish data by sex and stratum, applying upweighting and optionally bootstrap resampling to estimate uncertainty.
+#'   Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 #' @param fish_data Data frame with columns: stratum, sample_id, length, male, female, unsexed, sample_weight_kg, total_catch_weight_kg (weight-based) OR stratum, sample_id, length, male, female, unsexed, sample_area_km2, catch_density_kg_km2 (density-based)
 #' @param strata_data Data frame with columns: stratum, stratum_total_catch_kg (weight-based) OR stratum, stratum_area_km2 (density-based)
 #' @param length_range Numeric vector of min and max lengths to include (e.g., c(15, 35))
@@ -14,7 +12,6 @@
 #' @param minus_group Logical, combine lengths <= min length into a minus group (default FALSE)
 #' @param return_full_bootstraps Logical, whether to return all individual bootstrap results along with summaries (default FALSE)
 #' @param verbose Logical, whether to print progress messages (default TRUE)
-#'
 #' @importFrom stats sd
 #' @importFrom dplyr group_by summarise ungroup mutate left_join bind_rows
 #' @return When bootstraps > 0: List containing:
@@ -147,13 +144,11 @@
 #' # Access individual bootstrap iteration results
 #' bootstrap_1 <- results_full$full_lc_bootstraps[, , , 1]
 #' }
-#'
 #' @seealso
 #' \code{\link{plot.length_composition}} for plotting results,
 #' \code{\link{print.length_composition}} for printing summaries,
 #' \code{\link{get_default_lw_params}} for default length-weight parameters,
 #' \code{\link{generate_test_data}} for creating test datasets
-#'
 #' @export
 calculate_length_compositions <- function(fish_data,
                                           strata_data,

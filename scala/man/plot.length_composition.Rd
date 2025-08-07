@@ -2,7 +2,8 @@
 % Please edit documentation in R/plot.length_composition.R
 \name{plot.length_composition}
 \alias{plot.length_composition}
-\title{Plot method for length composition objects}
+\title{Plot method for length composition objects
+Creates ggplot visualisations of length composition results.}
 \usage{
 \method{plot}{length_composition}(
   x,
@@ -36,5 +37,6 @@
 A ggplot object
 }
 \description{
+Plot method for length composition objects
 Creates ggplot visualisations of length composition results.
 }

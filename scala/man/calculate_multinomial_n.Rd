@@ -62,7 +62,7 @@ When all = FALSE: Named list containing:
 }
 \description{
 Calculates the multinomial effective sample size from length or age composition proportions and
-their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
+  their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
 }
 \details{
 The function fits a nonlinear model based on the multinomial distribution relationship:

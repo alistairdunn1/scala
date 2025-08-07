@@ -38,7 +38,7 @@ List containing:
 }
 \description{
 Internal function to convert length compositions to age compositions using age-length key.
-This simplified version only uses exact length matches - no interpolation.
-For complete ALK with interpolation, use create_alk() first.
+  This simplified version only uses exact length matches - no interpolation.
+  For complete ALK with interpolation, use create_alk() first.
 }
 \keyword{internal}

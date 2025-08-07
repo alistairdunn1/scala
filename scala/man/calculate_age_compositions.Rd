@@ -64,9 +64,9 @@ List containing:
 }
 \description{
 Converts length compositions to age compositions by applying age-length keys.
-Propagates uncertainty from bootstrap length composition estimates through
-the age-length transformation to provide age composition CVs and confidence intervals.
-Supports sex-specific age-length keys for improved biological realism.
+  Propagates uncertainty from bootstrap length composition estimates through
+  the age-length transformation to provide age composition CVs and confidence intervals.
+  Supports sex-specific age-length keys for improved biological realism.
 }
 \details{
 The function applies age-length keys to convert length compositions to age compositions.

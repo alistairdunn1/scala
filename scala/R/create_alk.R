@@ -1,8 +1,6 @@
-#' Create Complete Age-Length Key
-#'
-#' Creates a complete age-length key that includes all required length and age bins,
-#' with interpolation/extrapolation as needed for missing combinations.
-#'
+#' @title Create Complete Age-Length Key
+#' @description Creates a complete age-length key that includes all required length and age bins,
+#'   with interpolation/extrapolation as needed for missing combinations.
 #' @param age_data Data frame containing age-length data with required columns:
 #'   'age', 'length', and optionally 'sex'. Each row represents one aged fish.
 #' @param lengths Vector of all length bins that will be encountered (required)
@@ -16,7 +14,6 @@
 #' @param interpolate Logical, whether to allow linear interpolation for missing length bins (default: TRUE)
 #' @param extrapolate Logical, whether to allow extrapolation for lengths outside the observed range (default: TRUE)
 #' @param verbose Logical, whether to print progress messages
-#'
 #' @return Age-length key object (data.frame for single key, named list for sex-specific keys)
 #'   with interpolation information stored as attributes:
 #'   \itemize{

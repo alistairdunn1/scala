@@ -2,9 +2,7 @@
 utils::globalVariables(c("length_bin", "composition", "sex", "ci_lower", "ci_upper", "stratum"))
 
 #' Plot method for length composition objects
-#'
 #' Creates ggplot visualisations of length composition results.
-#'
 #' @param x An object of class \code{length_composition}
 #' @param by_stratum Logical, whether to plot by stratum (TRUE) or total across strata (FALSE). Default is FALSE.
 #' @param stratum Character, name of a specific stratum to plot. If provided, only that stratum is plotted (overrides by_stratum). Default is NULL.
@@ -13,9 +11,7 @@ utils::globalVariables(c("length_bin", "composition", "sex", "ci_lower", "ci_upp
 #' @param length_bin_size Numeric, size of length bins in cm for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.
 #' @param unsexed Logical, whether to include unsexed fish category in the plot. Default is FALSE.
 #' @param ... Additional arguments (not used)
-#'
 #' @return A ggplot object
-#'
 #' @importFrom ggplot2 ggplot aes geom_line geom_ribbon scale_colour_manual scale_fill_manual facet_grid labs ylim
 #' @importFrom tools toTitleCase
 #' @export

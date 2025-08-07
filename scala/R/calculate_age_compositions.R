@@ -1,10 +1,8 @@
-#' Calculate Age Compositions from Length Compositions using Age-Length Keys
-#'
-#' Converts length compositions to age compositions by applying age-length keys.
-#' Propagates uncertainty from bootstrap length composition estimates through
-#' the age-length transformation to provide age composition CVs and confidence intervals.
-#' Supports sex-specific age-length keys for improved biological realism.
-#'
+#' @title Calculate Age Compositions from Length Compositions using Age-Length Keys
+#' @description Converts length compositions to age compositions by applying age-length keys.
+#'   Propagates uncertainty from bootstrap length composition estimates through
+#'   the age-length transformation to provide age composition CVs and confidence intervals.
+#'   Supports sex-specific age-length keys for improved biological realism.
 #' @param x A length_composition object from calculate_length_compositions()
 #' @param age_length_key Either:
 #'   \itemize{
@@ -17,9 +15,7 @@
 #' @param plus_group_age Logical, combine ages >= max age into a plus group (default TRUE)
 #' @param minus_group_age Logical, combine ages <= min age into a minus group (default FALSE)
 #' @param verbose Logical, whether to print progress messages (default TRUE)
-#'
 #' @importFrom stats aggregate ave quantile
-#'
 #' @return List containing:
 #'   \itemize{
 #'     \item \code{age_composition}: 3D array (age x sex x stratum) of age compositions
@@ -48,7 +44,6 @@
 #'     \item \code{age_length_key}: The age-length key(s) used in calculations
 #'     \item \code{sex_specific_keys}: Logical indicating whether sex-specific keys were used
 #'   }
-#'
 #' @details
 #' The function applies age-length keys to convert length compositions to age compositions.
 #' For each length bin, fish are allocated to ages according to the proportions in the
@@ -192,7 +187,6 @@
 #' \code{\link{calculate_length_compositions}} for generating length composition data,
 #' \code{\link{plot.age_composition}} for plotting age composition results,
 #' \code{\link{generate_age_length_key}} for creating sample age-length keys
-#'
 #' @export
 calculate_age_compositions <- function(x,
                                        age_length_key,

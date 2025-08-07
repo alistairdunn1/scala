@@ -92,7 +92,7 @@ When bootstraps > 0: List containing:
 }
 \description{
 Calculates length compositions for fish data by sex and stratum, applying upweighting and optionally bootstrap resampling to estimate uncertainty.
-Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
+  Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
 }
 \details{
 The function applies a two-stage upweighting process and uses bootstrap resampling to estimate uncertainty in length composition and proportion estimates.
@@ -176,7 +176,6 @@ results_full <- calculate_length_compositions(
 # Access individual bootstrap iteration results
 bootstrap_1 <- results_full$full_lc_bootstraps[, , , 1]
 }
-
 }
 \seealso{
 \code{\link{plot.length_composition}} for plotting results,
