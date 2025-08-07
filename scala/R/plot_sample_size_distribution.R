@@ -134,12 +134,6 @@ plot_sample_size_distribution <- function(evaluation_result,
   # Filter data to display range
   plot_data <- sample_data[sample_data$total >= min_fish & sample_data$total <= max_fish, ]
 
-  # Generate title if not provided
-  if (is.null(title)) {
-    n_strata <- length(unique(plot_data$stratum))
-    n_samples <- nrow(plot_data)
-  }
-
   # Create the plot
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = total, fill = sample_category)) +
     ggplot2::geom_histogram(binwidth = bin_width, colour = "black", alpha = 0.8, size = 0.3) +

@@ -177,6 +177,7 @@ The package supports two scaling approaches:
 - **Stratum scaling**: `stratum_area / sum_of_sample_areas_in_stratum`
 - **Final scaling**: Combined effect scales individual fish counts to population estimates based on area coverage
 
+
 ### Bootstrap Uncertainty
 
 - Resamples samples within each stratum (with replacement)
@@ -253,7 +254,7 @@ This is particularly useful for:
 
 ### Age Composition Analysis
 
-The package provides a streamlined workflow for converting length compositions to age compositions:
+The package provides a workflow for converting length compositions to age compositions:
 
 **Smart Age-Length Key Detection**:
 
@@ -306,16 +307,16 @@ The `create_alk()` function provides a comprehensive solution for creating compl
 - **Sex-Specific Support**: Handles male, female, and combined unsexed keys automatically
 - **Sampling Analysis**: Calculates current otolith counts and additional requirements for minimum (3 per length bin) and optimum (10 per length bin) coverage
 - **User-Specified Tails**: Optional specification of age assignments for extreme lengths
-- **Comprehensive Validation**: Extensive input validation and progress reporting
-- **Smart Normalisation**: Ensures age proportions sum to 1.0 within each length bin
+- **Validation**: Functions to undertake input validation and progress reporting
+- **Normalisation**: Ensures age proportions sum to 1.0 within each length bin
 
-The default optimum target of 10 otoliths per length bin is based on simulation studies showing this provides reliable age composition estimates (Coggins et al., 2013).
+The default optimum target of 10 otoliths per length bin is based on a simulation study that recommends the number of otoliths for reliable age composition estimates (Coggins et al., 2013).
 
 ### Interpolation and Extrapolation Algorithms
 
 The `create_alk()` function uses sophisticated algorithms to fill missing length-age combinations, applied in priority order:
 
-#### 1. User-Specified Tail Ages (Highest Priority)
+#### 1. User-Specified Tail Ages)
 User-defined length-age pairs are applied first for extreme lengths:
 - Applied to lengths at or beyond the observed data range
 - Takes precedence over automatic interpolation/extrapolation
@@ -352,7 +353,7 @@ The algorithms are applied in this order for each missing length:
 3. If not found and length is beyond observed range → use constant extrapolation (if enabled)
 4. If disabled, the length remains unfilled (user must handle manually)
 
-This hierarchical approach ensures expert knowledge takes precedence while providing robust automatic methods for routine data gaps.
+This hierarchical approach ensures expert knowledge takes precedence while providing automatic methods for routine data gaps.
 
 ### Basic Usage
 
@@ -693,7 +694,7 @@ The plotting system generates **line plots with confidence interval ribbons** wh
 - **Faceted layout**: Professional multi-panel display for comparing strata and sex categories
 - **Colour customisation**: Flexible theming options for publication-quality figures
 
-### Complete Visualisation Example
+### Visualisation Example
 
 ```r
 # Load test data for research surveys
@@ -1059,15 +1060,74 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 
 ## Function Parameters
 
-- **`fish_data`**: Data frame with fish sampling data (required, must include sex columns)
-- **`strata_data`**: Data frame with stratum totals (required)
-- **`length_range`**: Vector of [min_length, max_length] to include (default: full range)
+### calculate_length_compositions()
+
+- **`fish_data`**: Data frame with fish sampling data including columns: stratum, sample_id, length, male, female, unsexed, plus either sample_weight_kg + total_catch_weight_kg (weight-based) or sample_area_km2 + catch_density_kg_km2 (density-based)
+- **`strata_data`**: Data frame with columns: stratum, plus either stratum_total_catch_kg (weight-based) or stratum_area_km2 (density-based)
+- **`length_range`**: Numeric vector of min and max lengths to include (e.g., c(15, 35))
 - **`lw_params_male`**: Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0) (required)
 - **`lw_params_female`**: Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0) (required)
 - **`lw_params_unsexed`**: Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0) (required)
-- **`bootstraps`**: Number of bootstrap iterations (default: 300)
-- **`plus_group`**: Combine all lengths ≥ max_length (default: FALSE)
-- **`minus_group`**: Combine all lengths ≤ min_length (default: FALSE)
+- **`bootstraps`**: Integer, number of bootstrap iterations. Set to 0 for no bootstrapping (default: 300)
+- **`plus_group`**: Logical, combine lengths >= max length into a plus group (default: FALSE)
+- **`minus_group`**: Logical, combine lengths <= min length into a minus group (default: FALSE)
+- **`return_full_bootstraps`**: Logical, whether to return all individual bootstrap results along with summaries (default: FALSE)
+- **`verbose`**: Logical, whether to print progress messages (default: TRUE)
+
+### calculate_age_compositions()
+
+- **`x`**: A length_composition object from calculate_length_compositions()
+- **`age_length_key`**: Either a single data frame or a named list of sex-specific data frames containing age-length key data
+- **`age_range`**: Numeric vector of min and max ages to include (e.g., c(1, 10))
+- **`plus_group_age`**: Logical, combine ages >= max age into a plus group (default: TRUE)
+- **`minus_group_age`**: Logical, combine ages <= min age into a minus group (default: FALSE)
+- **`verbose`**: Logical, whether to print progress messages (default: TRUE)
+
+### create_alk()
+
+- **`age_data`**: Data frame containing age-length data with required columns: 'age', 'length', and optionally 'sex'
+- **`lengths`**: Vector of all length bins that will be encountered (required)
+- **`ages`**: Vector of all age bins (required)
+- **`tail_ages`**: Named list specifying length-age pairs for lengths at tails (optional)
+- **`min_ages_per_length`**: Minimum number of ages required per length bin (default: 3)
+- **`optimum_ages_per_length`**: Optimum number of ages per length bin (default: 10)
+- **`length_bin_size`**: Numeric value for binning lengths (e.g., 2 for 2cm bins). If NULL (default), uses raw length values
+- **`interpolate`**: Logical, whether to allow linear interpolation for missing length bins (default: TRUE)
+- **`extrapolate`**: Logical, whether to allow extrapolation for lengths outside the observed range (default: TRUE)
+- **`verbose`**: Logical, whether to print progress messages
+
+### plot_alk()
+
+- **`alk`**: Age-length key data frame
+- **`by_sex`**: Logical, whether to plot by sex (default: TRUE)
+- **`type`**: Character, type of plot: "heatmap" for heatmap visualisation or "points" for point plot (default: "heatmap")
+- **`rug`**: Logical, whether to add a rug plot on the y-axis showing length distribution (default: FALSE)
+
+### generate_test_data()
+
+- **`data_type`**: Character, either "commercial" for weight-based data or "survey" for density-based data
+
+### calculate_multinomial_n()
+
+- **`x`**: A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()
+- **`stratum`**: Character, name of stratum to analyse. If NULL (default), uses pooled data across all strata
+- **`sex`**: Character, sex category to analyse: "male", "female", "unsexed", or "total" (default)
+- **`all`**: Logical, whether to calculate for all combinations of strata and sex categories (default: FALSE)
+- **`sex_categories`**: Character vector of sex categories to analyse when all = TRUE (default: c("male", "female", "unsexed", "total"))
+- **`include_pooled`**: Logical, whether to include pooled results when all = TRUE (default: TRUE)
+- **`remove_outliers`**: Numeric, proportion of outliers to remove (0-1, default: 0.05)
+- **`min_proportion`**: Numeric, minimum proportion threshold to include in analysis (default: 0.0001)
+- **`max_cv`**: Numeric, maximum CV threshold to include in analysis (default: 5.0)
+- **`trace`**: Logical, whether to show fitting details (default: FALSE)
+- **`quiet`**: Logical, whether to suppress individual fitting messages when all = TRUE (default: TRUE)
+
+### get_default_lw_params()
+
+- **No parameters**: Returns default length-weight parameters for Ross Sea toothfish
+
+### resample_fish_data()
+
+- **`fish_data`**: Data frame with fish observation data including columns: stratum, sample_id, length, male, female, unsexed, total
 
 ### Length-Weight Parameter Notes
 

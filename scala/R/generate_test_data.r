@@ -16,7 +16,7 @@
 #' }
 #'
 #' @seealso
-#' \code{\link{calculate_length_compositions}} for analyzing the generated data,
+#' \code{\link{calculate_length_compositions}} for analysing the generated data,
 #' \code{\link{generate_commercial_test_data}} and \code{\link{generate_survey_test_data}} for specific data types
 #'
 #' @examples
