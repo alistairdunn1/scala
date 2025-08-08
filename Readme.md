@@ -5,7 +5,7 @@ An R implementation for calculating scaled length compositions and age compositi
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
 [![R Package](https://img.shields.io/badge/R-package-blue.svg)](https://www.r-project.org/)
-[![Version](https://img.shields.io/badge/version-2025--07-orange.svg)](https://github.com/alistairdunn1/scala)
+[![Version](https://img.shields.io/badge/version-2025--08-orange.svg)](https://github.com/alistairdunn1/scala)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Table of Contents
@@ -189,10 +189,10 @@ The package supports two scaling approaches:
 ## Requirements
 
 - R (version 4.0 or higher)
-- **Required packages**: `stats` (included with base R)
-- **Suggested packages**: `ggplot2`, `dplyr`, `tidyr`, `RColorBrewer`, `viridis`, `patchwork`, `plotly`, `gridExtra`, `rmarkdown`, `testthat`
-- **Memory**: Sufficient RAM for bootstrap operations (depends on data size and bootstrap iterations)
-- **Storage**: Minimal disk space required (package size ~1MB)
+- Required packages (per DESCRIPTION): `ggplot2`, `rlang`, `dplyr`, `stats`, `zoo`, `mgcv`
+- Suggested packages: `tidyr`, `RColorBrewer`, `viridis`, `patchwork`, `plotly`, `gridExtra`, `rmarkdown`, `testthat`
+- Memory: Sufficient RAM for bootstrap operations (depends on data size and bootstrap iterations)
+- Storage: Minimal disk space required (package size ~1MB)
 
 ### Performance Considerations
 
@@ -216,11 +216,11 @@ The package provides the following main functions:
 - **`get_default_lw_params()`**: Get default length-weight parameters for testing
 - **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
 - **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from length or age composition proportions and CVs
-- **`calculate_all_multinomial_n()`**: Calculate effective sample sizes for all stratum/sex combinations from length or age compositions
+- **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) and return a prediction function for age probabilities by length
 - **`plot.length_composition()`**: Create professional visualisations with lines and uncertainty ribbons (requires ggplot2)
 - **`plot.age_composition()`**: Visualise age compositions with uncertainty ribbons using **identical interface** to length plotting
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
-- **`plot_alk()`**: Visualise age-length keys as heatmaps
+- **`plot_alk()`**: Visualise age-length keys as heatmaps or points (with optional y-axis rug for length distribution)
 - **`plot_sample_size_distribution()`**: Create stacked histograms showing sample size distributions by strata, with samples categorised by adequacy (non-representative small, representative small, adequate)
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
 
@@ -292,6 +292,30 @@ This enables:
 - Stock assessment ready outputs with proper uncertainty quantification
 
 For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_length_compositions`).
+
+### Ordinal Age-at-Length Modelling (Optional)
+
+When raw age-length observations are available, you can fit a smooth ordinal age-at-length model and predict an ALK over desired lengths (and sex):
+
+```r
+# Fit model from raw age-length-sex data (one row per aged fish)
+ord <- fit_ordinal_alk(alk_data = age_data, by_sex = TRUE)
+
+# Predict per-age probabilities for given lengths and sex
+lengths <- 20:70
+sex <- rep(c("male", "female"), each = length(lengths))
+probs <- ord$predict_function(lengths, sex)
+
+# Combine into an ALK-like data.frame if needed
+pred_alk <- cbind(
+  data.frame(length = rep(lengths, 2), sex = sex),
+  as.data.frame(probs)
+)
+```
+
+Notes:
+- Uses mgcv::ocat with cumulative logit; returns a robust prediction function.
+- Probabilities are normalized per row and non-negative; ages increase with length on average.
 
 ## Creating Complete Age-Length Keys
 
@@ -1100,8 +1124,8 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 
 - **`alk`**: Age-length key data frame
 - **`by_sex`**: Logical, whether to plot by sex (default: TRUE)
-- **`type`**: Character, type of plot: "heatmap" for heatmap visualisation or "points" for point plot (default: "heatmap")
-- **`rug`**: Logical, whether to add a rug plot on the y-axis showing length distribution (default: FALSE)
+- **`type`**: Character, type of plot: "heatmap" (heatmap visualisation) or "points" (point plot) (default: "heatmap")
+- **`rug`**: Logical, whether to add a rug on the y-axis showing length distribution (default: FALSE)
 
 ### generate_test_data()
 
@@ -1477,6 +1501,21 @@ When sample weight and total catch weight data are available, the function evalu
 
 - **Minimum fish per sample**: 15 fish (default) provides stable within-sample resampling
 - **Minimum samples per stratum**: 8 samples (default) provides stable between-sample resampling
+-
+### fit_ordinal_alk()
+
+- **`alk_data`**: Data frame (or named list of sex-specific frames) with columns: `age`, `length`, and optionally `sex` (one row per aged fish)
+- **`by_sex`**: Logical, whether to fit sex-specific smooths (default: TRUE)
+- **`k`**: Basis dimension for smooth terms; -1 uses mgcv’s automatic selection (default: -1)
+- **`method`**: Smoothing parameter estimation method for mgcv (default: "REML")
+- **`weights`**: Optional observation weights (default: NULL)
+- **`verbose`**: Logical, print model details (default: TRUE)
+
+Returns a list with:
+- `model`: fitted mgcv::gam object (ocat family)
+- `predict_function(lengths, sex)`: function returning a matrix of per-age probabilities
+- `summary`: key model metrics
+- `age_levels`, `sex_levels`, `by_sex`
 - **Recommended fish per sample**: 20+ fish for critical stock assessment applications
 - **Recommended samples per stratum**: 10+ samples for robust uncertainty estimation
 

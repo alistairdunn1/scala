@@ -297,16 +297,22 @@ calculate_length_compositions <- function(fish_data,
   # Calculate stratum totals vectorized
   stratum_totals <- apply(main_lf[, "total", , drop = FALSE], 3, sum)
 
+  # Only normalise the count channels, never the 'composition' channel
+  meas <- c("male", "female", "unsexed", "total")
   for (i in 1:n_strata) {
     if (stratum_totals[i] > 0) {
-      proportions[, , i] <- main_lf[, , i] / stratum_totals[i]
+      proportions[, meas, i] <- main_lf[, meas, i] / stratum_totals[i]
     }
   }
+  # Preserve composition column
+  proportions[, "composition", ] <- array(rep(lengths, times = n_strata), dim = c(n_lengths, n_strata))
 
   pooled_total <- sum(pooled_lf[, "total"])
   if (pooled_total > 0) {
-    pooled_proportions <- pooled_lf / pooled_total
+    pooled_proportions[, meas] <- pooled_lf[, meas] / pooled_total
   }
+  # Preserve composition column
+  pooled_proportions[, "composition"] <- lengths
 
   # Hierarchical bootstrap if requested
   if (bootstraps > 0) {
@@ -319,7 +325,7 @@ calculate_length_compositions <- function(fish_data,
     # Set up bootstrap arrays
     lf_bootstraps <- array(0, dim = c(n_lengths, 5, n_strata, bootstraps))
     dimnames(lf_bootstraps) <- list(
-      lengths, c("length", "male", "female", "unsexed", "total"),
+      lengths, c("composition", "male", "female", "unsexed", "total"),
       strata_names, 1:bootstraps
     )
 
@@ -332,69 +338,71 @@ calculate_length_compositions <- function(fish_data,
       lf_bootstraps[, , , b] <- boot_lf
     }
 
-    # Calculate CVs from bootstrap results
-    lf_means <- apply(lf_bootstraps, c(1, 2, 3), mean)
-    lf_sds <- apply(lf_bootstraps, c(1, 2, 3), sd)
-    lf_cvs <- ifelse(lf_means > 0, lf_sds / lf_means, 0)
+    # Helper for CV
+    .cv <- function(x) {
+      m <- mean(x, na.rm = TRUE)
+      s <- stats::sd(x, na.rm = TRUE)
+      if (!is.finite(m) || m <= 0) return(NA_real_)
+      s / m
+    }
 
-    # Pooled bootstrap results
-    pooled_bootstraps <- apply(lf_bootstraps, c(1, 2, 4), sum) # Sum across strata
-    pooled_mean <- apply(pooled_bootstraps, c(1, 2), mean)
-    pooled_sd <- apply(pooled_bootstraps, c(1, 2), sd)
-    pooled_cv <- ifelse(pooled_mean > 0, pooled_sd / pooled_mean, 0)
+    # Calculate CVs from bootstrap results (exclude 'composition')
+    lf_means <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), mean, na.rm = TRUE)
+    lf_sds   <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), sd,   na.rm = TRUE)
+    lf_cvs   <- ifelse(lf_means > 0, lf_sds / lf_means, NA_real_)
 
-    # Bootstrap proportions - optimized using vectorized operations
-    prop_bootstraps <- lf_bootstraps
+    # Pooled bootstrap results (sum across strata within each bootstrap)
+    pooled_bootstraps <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 4), sum, na.rm = TRUE) # [length x meas x boot]
+    pooled_mean <- apply(pooled_bootstraps, c(1, 2), mean, na.rm = TRUE)
+    pooled_sd   <- apply(pooled_bootstraps, c(1, 2), sd,   na.rm = TRUE)
+    pooled_cv   <- ifelse(pooled_mean > 0, pooled_sd / pooled_mean, NA_real_)
 
-    # Calculate stratum totals for all bootstraps at once
-    stratum_totals <- apply(lf_bootstraps[, "total", , , drop = FALSE], c(3, 4), sum)
+    # Bootstrap proportions (exclude 'composition')
+    prop_bootstraps <- lf_bootstraps[, meas, , , drop = FALSE]
 
-    # Vectorized proportion calculation
+    # Stratum totals per (stratum, bootstrap)
+    stratum_totals <- apply(lf_bootstraps[, "total", , , drop = FALSE], c(3, 4), sum, na.rm = TRUE) # [stratum x boot]
+
+    # Normalise within (stratum, bootstrap) across length
     for (i in 1:n_strata) {
       for (b in 1:bootstraps) {
-        if (stratum_totals[i, b] > 0) {
-          prop_bootstraps[, , i, b] <- lf_bootstraps[, , i, b] / stratum_totals[i, b]
+        if (is.finite(stratum_totals[i, b]) && stratum_totals[i, b] > 0) {
+          prop_bootstraps[, , i, b] <- lf_bootstraps[, meas, i, b] / stratum_totals[i, b]
+        } else {
+          prop_bootstraps[, , i, b] <- NA_real_
         }
       }
     }
 
-    prop_means <- apply(prop_bootstraps, c(1, 2, 3), mean)
-    prop_sds <- apply(prop_bootstraps, c(1, 2, 3), sd)
-    prop_cvs <- ifelse(prop_means > 0, prop_sds / prop_means, 0)
+    prop_means <- apply(prop_bootstraps, c(1, 2, 3), mean, na.rm = TRUE)
+    prop_sds   <- apply(prop_bootstraps, c(1, 2, 3), sd,   na.rm = TRUE)
+    prop_cvs   <- ifelse(prop_means > 0, prop_sds / prop_means, NA_real_)
 
-    # Pooled proportion bootstrap - optimized using vectorized operations
+    # Pooled proportion bootstrap
     pooled_prop_bootstraps <- pooled_bootstraps
-
-    # Calculate totals for all bootstraps at once
-    pooled_totals <- apply(pooled_bootstraps[, "total", , drop = FALSE], 3, sum)
-
-    # Vectorized proportion calculation
+    pooled_totals <- apply(pooled_bootstraps[, "total", , drop = FALSE], 3, sum, na.rm = TRUE) # [boot]
     for (b in 1:bootstraps) {
-      if (!is.na(pooled_totals[b]) && pooled_totals[b] > 0) {
+      if (is.finite(pooled_totals[b]) && pooled_totals[b] > 0) {
         pooled_prop_bootstraps[, , b] <- pooled_bootstraps[, , b] / pooled_totals[b]
+      } else {
+        pooled_prop_bootstraps[, , b] <- NA_real_
       }
     }
 
-    pooled_prop_mean <- apply(pooled_prop_bootstraps, c(1, 2), mean)
-    pooled_prop_sd <- apply(pooled_prop_bootstraps, c(1, 2), sd)
-    pooled_prop_cv <- ifelse(pooled_prop_mean > 0, pooled_prop_sd / pooled_prop_mean, 0)
+    pooled_prop_mean <- apply(pooled_prop_bootstraps, c(1, 2), mean, na.rm = TRUE)
+    pooled_prop_sd   <- apply(pooled_prop_bootstraps, c(1, 2), sd,   na.rm = TRUE)
+    pooled_prop_cv   <- ifelse(pooled_prop_mean > 0, pooled_prop_sd / pooled_prop_mean, NA_real_)
 
-    # Calculate empirical 95% confidence intervals
-    if (verbose) cat("Calculating empirical 95% confidence intervals...\n")
+    # Empirical 95% confidence intervals (percentiles), exclude 'composition'
+    lf_ci_lower <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
+    lf_ci_upper <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), quantile, probs = 0.975, na.rm = TRUE)
 
-    # Length composition confidence intervals (by stratum)
-    lf_ci_lower <- apply(lf_bootstraps, c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
-    lf_ci_upper <- apply(lf_bootstraps, c(1, 2, 3), quantile, probs = 0.975, na.rm = TRUE)
-
-    # Pooled length composition confidence intervals
     pooled_ci_lower <- apply(pooled_bootstraps, c(1, 2), quantile, probs = 0.025, na.rm = TRUE)
     pooled_ci_upper <- apply(pooled_bootstraps, c(1, 2), quantile, probs = 0.975, na.rm = TRUE)
 
-    # Proportion confidence intervals (by stratum)
     prop_ci_lower <- apply(prop_bootstraps, c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
     prop_ci_upper <- apply(prop_bootstraps, c(1, 2, 3), quantile, probs = 0.975, na.rm = TRUE)
 
-    # Pooled proportion confidence intervals
     pooled_prop_ci_lower <- apply(pooled_prop_bootstraps, c(1, 2), quantile, probs = 0.025, na.rm = TRUE)
     pooled_prop_ci_upper <- apply(pooled_prop_bootstraps, c(1, 2), quantile, probs = 0.975, na.rm = TRUE)
   } else {
@@ -470,7 +478,7 @@ calculate_length_compositions <- function(fish_data,
     pooled_length_composition = pooled_lf,
     pooled_proportions = pooled_proportions,
 
-    # Uncertainty estimates
+    # Uncertainty estimates (only for measurable channels)
     lc_cvs = lf_cvs,
     proportions_cvs = prop_cvs,
     pooled_lc_cv = pooled_cv,
