@@ -177,7 +177,6 @@ The package supports two scaling approaches:
 - **Stratum scaling**: `stratum_area / sum_of_sample_areas_in_stratum`
 - **Final scaling**: Combined effect scales individual fish counts to population estimates based on area coverage
 
-
 ### Bootstrap Uncertainty
 
 - Resamples samples within each stratum (with replacement)
@@ -217,6 +216,8 @@ The package provides the following main functions:
 - **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
 - **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from length or age composition proportions and CVs
 - **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) and return a prediction function for age probabilities by length
+- **`fit_cohort_alk()`**: Fit a cohort-based ordinal GAM model to estimate year classes from length, year, and sex, with age back-calculation capability
+- **`compare_alks()`**: Compare age-length keys from empirical (`create_alk`) and model-based (`fit_ordinal_alk`) methods with summary metrics and optional visualisation
 - **`plot.length_composition()`**: Create professional visualisations with lines and uncertainty ribbons (requires ggplot2)
 - **`plot.age_composition()`**: Visualise age compositions with uncertainty ribbons using **identical interface** to length plotting
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
@@ -293,7 +294,7 @@ This enables:
 
 For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_length_compositions`).
 
-### Ordinal Age-at-Length Modelling (Optional)
+### Ordinal Age-at-Length Modelling (Optional). WARNING: In development)
 
 When raw age-length observations are available, you can fit a smooth ordinal age-at-length model and predict an ALK over desired lengths (and sex):
 
@@ -314,8 +315,38 @@ pred_alk <- cbind(
 ```
 
 Notes:
+
 - Uses mgcv::ocat with cumulative logit; returns a robust prediction function.
 - Probabilities are normalized per row and non-negative; ages increase with length on average.
+
+### Cohort-Based Age-at-Length Modelling (Optional). WARNING: In development)
+
+When raw age-length-year observations are available, you can fit a cohort-based ordinal GAM model to estimate year classes from length, year, and optionally sex:
+
+```r
+# Fit cohort model from raw age-length-year data 
+cohort_model <- fit_cohort_alk(alk_data = age_data, by_sex = TRUE, age_offset = 1)
+
+# Predict cohort probabilities for given lengths and years
+lengths <- c(30, 35, 40)
+years <- c(2018, 2019, 2020)
+sex <- rep("female", length(lengths))
+cohort_probs <- cohort_model$predict_cohort(lengths, years, sex)
+
+# Back-calculate age probabilities for a specific sampling year
+sampling_year <- 2020
+age_probs <- cohort_model$predict_age(lengths, sampling_year, sex)
+```
+
+**Key Features**:
+
+- **Year Class Calculation**: Cohorts defined as YC = (Year - Age) - age_offset (default age_offset = 1)
+- **Flexible Offset**: Configurable age_offset parameter to match different fisheries conventions
+- **Dual Predictions**: Estimate cohort probabilities OR back-calculate age probabilities
+- **Sex-Specific Models**: Optional sex-specific smooths for length and year effects
+- **Robust Fitting**: Uses mgcv::ocat with cumulative logit link for stable ordinal modeling
+
+**Algorithm**: The model fits cohort ~ s(length) + s(year) with optional sex interactions, where cohorts are calculated using the configurable year class equation. This allows tracking of specific birth cohorts through time and estimation of cohort-specific length distributions.
 
 ## Creating Complete Age-Length Keys
 
@@ -327,7 +358,7 @@ The `create_alk()` function provides a comprehensive solution for creating compl
 - **Automatic Key Creation**: Converts raw data to proportional age-length keys with comprehensive interpolation/extrapolation
 - **Length Binning**: Optional binning of length data (e.g., 2cm or 5cm bins) to consolidate sparse data
 - **Interpolation Control**: Optional linear interpolation between observed length bins
-- **Extrapolation Control**: Optional extrapolation beyond the observed length range  
+- **Extrapolation Control**: Optional extrapolation beyond the observed length range
 - **Sex-Specific Support**: Handles male, female, and combined unsexed keys automatically
 - **Sampling Analysis**: Calculates current otolith counts and additional requirements for minimum (3 per length bin) and optimum (10 per length bin) coverage
 - **User-Specified Tails**: Optional specification of age assignments for extreme lengths
@@ -341,37 +372,47 @@ The default optimum target of 10 otoliths per length bin is based on a simulatio
 The `create_alk()` function uses sophisticated algorithms to fill missing length-age combinations, applied in priority order:
 
 #### 1. User-Specified Tail Ages)
+
 User-defined length-age pairs are applied first for extreme lengths:
+
 - Applied to lengths at or beyond the observed data range
 - Takes precedence over automatic interpolation/extrapolation
 - Allows expert knowledge to override automatic methods
 
 #### 2. Linear Interpolation (Between Observed Data)
+
 For missing lengths that fall **between** observed data points:
+
 - **Method**: Distance-weighted linear interpolation
 - **Calculation**: `interpolated_prop = weight_lower × lower_prop + weight_upper × upper_prop`
 - **Weights**: Based on distance from bracketing lengths
 - **Assumption**: Age composition changes gradually between observed lengths
 
-**Example**: 
+**Example**:
+
 - Observed: Length 20 (Age 2: 60%, Age 3: 40%), Length 24 (Age 2: 30%, Age 3: 70%)
 - Missing: Length 22 (halfway between)
 - Result: Length 22 gets (Age 2: 45%, Age 3: 55%)
 
 #### 3. Constant Extrapolation (Beyond Observed Range)
+
 For missing lengths **outside** the observed data range:
+
 - **Method**: Copy age proportions from nearest observed length
 - **Lower tail**: Copy from smallest observed length
 - **Upper tail**: Copy from largest observed length
 - **Assumption**: Age composition remains constant beyond observed range
 
 **Example**:
+
 - Observed range: Lengths 22-28
 - Missing length 20: Copies all proportions from length 22
 - Missing length 30: Copies all proportions from length 28
 
 #### Algorithm Priority and Control
+
 The algorithms are applied in this order for each missing length:
+
 1. Check for user-specified tail ages → if found, use exact specification
 2. If not found and length is between observed data → use linear interpolation (if enabled)
 3. If not found and length is beyond observed range → use constant extrapolation (if enabled)
@@ -1501,7 +1542,8 @@ When sample weight and total catch weight data are available, the function evalu
 
 - **Minimum fish per sample**: 15 fish (default) provides stable within-sample resampling
 - **Minimum samples per stratum**: 8 samples (default) provides stable between-sample resampling
--
+- 
+
 ### fit_ordinal_alk()
 
 - **`alk_data`**: Data frame (or named list of sex-specific frames) with columns: `age`, `length`, and optionally `sex` (one row per aged fish)
@@ -1512,6 +1554,7 @@ When sample weight and total catch weight data are available, the function evalu
 - **`verbose`**: Logical, print model details (default: TRUE)
 
 Returns a list with:
+
 - `model`: fitted mgcv::gam object (ocat family)
 - `predict_function(lengths, sex)`: function returning a matrix of per-age probabilities
 - `summary`: key model metrics
