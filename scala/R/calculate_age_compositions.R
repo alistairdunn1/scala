@@ -327,6 +327,8 @@ calculate_age_compositions <- function(x,
   # Calculate age proportions from main compositions (vectorized)
   age_proportions <- main_age_comp
   pooled_age_comp <- apply(main_age_comp, c(1, 2), sum) # Sum across strata
+  # Preserve composition column - should contain ages, not summed values
+  pooled_age_comp[, "composition"] <- main_age_comp[, "composition", 1]  # Ages are same across strata
 
   # Vectorized proportion calculation for strata
   stratum_totals <- apply(main_age_comp[, "total", , drop = FALSE], 3, sum)
@@ -334,12 +336,16 @@ calculate_age_compositions <- function(x,
   if (any(valid_strata)) {
     for (s in which(valid_strata)) {
       age_proportions[, , s] <- main_age_comp[, , s] / stratum_totals[s]
+      # Preserve composition column - should contain ages, not proportions
+      age_proportions[, "composition", s] <- main_age_comp[, "composition", s]
     }
   }
 
   # Calculate pooled proportions
   pooled_total <- sum(pooled_age_comp[, "total"])
   pooled_age_proportions <- if (pooled_total > 0) pooled_age_comp / pooled_total else pooled_age_comp
+  # Preserve composition column - should contain ages, not proportions
+  pooled_age_proportions[, "composition"] <- pooled_age_comp[, "composition"]
 
   # Process bootstrap results if available
   if (x$n_bootstraps > 0 && !is.na(x$lc_bootstraps[1])) {
