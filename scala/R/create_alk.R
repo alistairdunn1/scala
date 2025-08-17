@@ -638,5 +638,8 @@ create_alk <- function(age_data,
   attr(complete_keys, "interpolation_info") <- interpolation_table
   attr(complete_keys, "is_sex_specific") <- is_sex_specific
 
+  # Set the S3 class
+  class(complete_keys) <- c("age_length_key", "list")
+
   return(complete_keys)
 }

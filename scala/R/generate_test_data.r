@@ -130,3 +130,39 @@ generate_survey_test_data <- function() {
 
   return(list(fish_data = fish_data, strata_data = strata_data))
 }
+
+#' Generate age data for testing ALK functions
+#' 
+#' Creates synthetic age-at-length data for testing age-length key functions
+#' 
+#' @param n_samples Number of fish samples to generate
+#' @return Data frame with age, length, and sex columns
+#' @export
+generate_test_age_data <- function(n_samples = 100) {
+  set.seed(789)
+  
+  # Generate realistic age-length relationships
+  ages <- sample(1:6, n_samples, replace = TRUE, prob = c(0.1, 0.2, 0.25, 0.25, 0.15, 0.05))
+  
+  # Length increases with age but with variation
+  lengths <- numeric(n_samples)
+  for (i in 1:n_samples) {
+    mean_length <- 16 + ages[i] * 3.2  # Length increases with age
+    lengths[i] <- round(rnorm(1, mean_length, 1.8), 0)
+  }
+  
+  # Ensure reasonable length bounds that fit test expectations
+  lengths <- pmax(lengths, 15)
+  lengths <- pmin(lengths, 35)
+  
+  # Assign sex
+  sex <- sample(c("male", "female", "unsexed"), n_samples, replace = TRUE, 
+                prob = c(0.45, 0.45, 0.1))
+  
+  data.frame(
+    age = ages,
+    length = lengths,
+    sex = sex,
+    stringsAsFactors = FALSE
+  )
+}
