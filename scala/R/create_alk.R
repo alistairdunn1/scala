@@ -90,6 +90,10 @@ create_alk <- function(age_data,
     stop("'lengths' and 'ages' must be numeric vectors")
   }
 
+  if (length(lengths) == 0 || length(ages) == 0) {
+    stop("'lengths' and 'ages' cannot be empty")
+  }
+
   # Apply length binning if specified
   if (!is.null(length_bin_size)) {
     if (!is.numeric(length_bin_size) || length(length_bin_size) != 1 || length_bin_size <= 0) {
@@ -98,11 +102,16 @@ create_alk <- function(age_data,
 
     if (verbose) cat("Binning lengths using", length_bin_size, "cm bins...\n")
 
-    # Bin the lengths in age_data
-    age_data$length <- floor(age_data$length / length_bin_size) * length_bin_size
-
-    # Bin the target lengths vector
-    lengths <- floor(lengths / length_bin_size) * length_bin_size
+    # Bin the lengths in age_data - for even bin sizes, center bins at odd numbers
+    if (length_bin_size %% 2 == 0) {
+      # For even bin sizes, adjust to center bins at odd numbers
+      age_data$length <- floor((age_data$length - 1) / length_bin_size) * length_bin_size + 1
+      lengths <- floor((lengths - 1) / length_bin_size) * length_bin_size + 1
+    } else {
+      # For odd bin sizes, use standard binning
+      age_data$length <- floor(age_data$length / length_bin_size) * length_bin_size
+      lengths <- floor(lengths / length_bin_size) * length_bin_size
+    }
     lengths <- sort(unique(lengths))
 
     # Bin tail_ages lengths if provided
@@ -385,6 +394,13 @@ create_alk <- function(age_data,
         }
       }
     }
+
+    # CRITICAL FIX: Normalize proportions for each length bin after interpolation
+    # This ensures interpolated age distributions are valid (sum to 1)
+    complete_key <- complete_key[order(complete_key$length, complete_key$age), ]
+    complete_key$proportion <- ave(complete_key$proportion, complete_key$length,
+      FUN = function(x) x / sum(x)
+    )
 
     # Create simple summary table
     methods_used <- data.frame(

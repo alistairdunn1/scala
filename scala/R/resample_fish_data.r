@@ -24,6 +24,21 @@
 #'   \code{\link{generate_test_data}} for creating test data to resample
 #' @export
 resample_fish_data <- function(fish_data) {
+  # Validate input
+  if (!is.data.frame(fish_data)) {
+    stop("fish_data must be a data frame")
+  }
+
+  required_cols <- c("stratum", "sample_id", "length", "male", "female", "unsexed")
+  missing_cols <- setdiff(required_cols, names(fish_data))
+  if (length(missing_cols) > 0) {
+    stop("fish_data must contain required columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  if (nrow(fish_data) == 0) {
+    stop("fish_data cannot be empty")
+  }
+
   # Optimized helper function to resample fish counts using multinomial sampling
   resample_fish_counts_optimized <- function(sample_data) {
     if (nrow(sample_data) == 0) {
@@ -36,42 +51,46 @@ resample_fish_data <- function(fish_data) {
       return(sample_data)
     }
 
-    # Create probability vector for each fish (length-sex combination)
-    fish_probs <- sample_data$total / total_fish
+    # CORRECTED APPROACH: Resample total counts per length bin, then distribute by sex
+    # Group by length to get total fish per length bin
+    length_totals <- aggregate(total ~ length, data = sample_data, sum)
 
-    # Sample with replacement
-    resampled_indices <- sample(seq_len(nrow(sample_data)),
-      size = total_fish,
-      replace = TRUE,
-      prob = fish_probs
-    )
+    # Resample each length bin's total count using Poisson (appropriate for count data)
+    resampled_length_totals <- length_totals
+    resampled_length_totals$total <- rpois(nrow(length_totals), lambda = length_totals$total)
 
-    # Count how many times each row was selected
-    count_table <- table(resampled_indices)
+    # Create result data frame
+    result_rows <- vector("list", nrow(resampled_length_totals))
 
-    # Create resampled data
-    result_rows <- vector("list", length(count_table))
+    for (i in seq_len(nrow(resampled_length_totals))) {
+      length_bin <- resampled_length_totals$length[i]
+      resampled_total <- resampled_length_totals$total[i]
 
-    for (i in seq_along(count_table)) {
-      row_idx <- as.numeric(names(count_table)[i])
-      count <- as.numeric(count_table[i])
-      original_row <- sample_data[row_idx, ]
+      if (resampled_total == 0) next
 
-      # Calculate resampled counts proportionally
-      total_original <- original_row$total
-      if (total_original > 0) {
-        # Use multinomial to distribute count across sex categories
-        sex_probs <- c(original_row$male, original_row$female, original_row$unsexed) / total_original
-        sex_counts <- as.numeric(rmultinom(1, count, sex_probs))
+      # Get original sex distribution for this length bin
+      length_data <- sample_data[sample_data$length == length_bin, ]
+      if (nrow(length_data) == 0) next
+
+      # Calculate sex proportions from original data
+      total_male <- sum(length_data$male)
+      total_female <- sum(length_data$female)
+      total_unsexed <- sum(length_data$unsexed)
+      total_sex <- total_male + total_female + total_unsexed
+
+      if (total_sex > 0) {
+        sex_probs <- c(total_male, total_female, total_unsexed) / total_sex
+        # Distribute resampled total across sex categories using multinomial
+        sex_counts <- as.numeric(rmultinom(1, resampled_total, sex_probs))
       } else {
         sex_counts <- c(0, 0, 0)
       }
 
       # Create new row with resampled counts
       result_rows[[i]] <- data.frame(
-        stratum = original_row$stratum,
-        sample_id = original_row$sample_id,
-        length = original_row$length,
+        stratum = length_data$stratum[1], # All should be same stratum
+        sample_id = length_data$sample_id[1], # All should be same sample
+        length = length_bin,
         male = sex_counts[1],
         female = sex_counts[2],
         unsexed = sex_counts[3],
@@ -79,10 +98,10 @@ resample_fish_data <- function(fish_data) {
         stringsAsFactors = FALSE
       )
 
-      # Copy other metadata columns
-      other_cols <- setdiff(names(original_row), c("stratum", "sample_id", "length", "male", "female", "unsexed", "total"))
+      # Copy other metadata columns from first row
+      other_cols <- setdiff(names(length_data), c("stratum", "sample_id", "length", "male", "female", "unsexed", "total"))
       for (col in other_cols) {
-        result_rows[[i]][[col]] <- original_row[[col]]
+        result_rows[[i]][[col]] <- length_data[[col]][1]
       }
     }
 

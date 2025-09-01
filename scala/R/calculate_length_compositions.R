@@ -180,6 +180,15 @@ calculate_length_compositions <- function(fish_data,
   validate_lw_params(lw_params_male, "lw_params_male")
   validate_lw_params(lw_params_female, "lw_params_female")
   validate_lw_params(lw_params_unsexed, "lw_params_unsexed")
+
+  # Validate length_range parameter
+  if (!is.numeric(length_range) || length(length_range) != 2) {
+    stop("length_range must be a numeric vector of length 2 (c(min_length, max_length))")
+  }
+  if (length_range[1] >= length_range[2]) {
+    stop("length_range[1] must be less than length_range[2] (min_length < max_length)")
+  }
+
   # Detect data type (weight-based vs density-based)
   weight_based_fish_cols <- c("sample_weight_kg", "total_catch_weight_kg")
   density_based_fish_cols <- c("sample_area_km2", "catch_density_kg_km2")
@@ -342,20 +351,22 @@ calculate_length_compositions <- function(fish_data,
     .cv <- function(x) {
       m <- mean(x, na.rm = TRUE)
       s <- stats::sd(x, na.rm = TRUE)
-      if (!is.finite(m) || m <= 0) return(NA_real_)
+      if (!is.finite(m) || m <= 0) {
+        return(NA_real_)
+      }
       s / m
     }
 
     # Calculate CVs from bootstrap results (exclude 'composition')
     lf_means <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), mean, na.rm = TRUE)
-    lf_sds   <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), sd,   na.rm = TRUE)
-    lf_cvs   <- ifelse(lf_means > 0, lf_sds / lf_means, NA_real_)
+    lf_sds <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), sd, na.rm = TRUE)
+    lf_cvs <- ifelse(lf_means > 0, lf_sds / lf_means, NA_real_)
 
     # Pooled bootstrap results (sum across strata within each bootstrap)
     pooled_bootstraps <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 4), sum, na.rm = TRUE) # [length x meas x boot]
     pooled_mean <- apply(pooled_bootstraps, c(1, 2), mean, na.rm = TRUE)
-    pooled_sd   <- apply(pooled_bootstraps, c(1, 2), sd,   na.rm = TRUE)
-    pooled_cv   <- ifelse(pooled_mean > 0, pooled_sd / pooled_mean, NA_real_)
+    pooled_sd <- apply(pooled_bootstraps, c(1, 2), sd, na.rm = TRUE)
+    pooled_cv <- ifelse(pooled_mean > 0, pooled_sd / pooled_mean, NA_real_)
 
     # Bootstrap proportions (exclude 'composition')
     prop_bootstraps <- lf_bootstraps[, meas, , , drop = FALSE]
@@ -375,8 +386,8 @@ calculate_length_compositions <- function(fish_data,
     }
 
     prop_means <- apply(prop_bootstraps, c(1, 2, 3), mean, na.rm = TRUE)
-    prop_sds   <- apply(prop_bootstraps, c(1, 2, 3), sd,   na.rm = TRUE)
-    prop_cvs   <- ifelse(prop_means > 0, prop_sds / prop_means, NA_real_)
+    prop_sds <- apply(prop_bootstraps, c(1, 2, 3), sd, na.rm = TRUE)
+    prop_cvs <- ifelse(prop_means > 0, prop_sds / prop_means, NA_real_)
 
     # Pooled proportion bootstrap
     pooled_prop_bootstraps <- pooled_bootstraps
@@ -390,8 +401,8 @@ calculate_length_compositions <- function(fish_data,
     }
 
     pooled_prop_mean <- apply(pooled_prop_bootstraps, c(1, 2), mean, na.rm = TRUE)
-    pooled_prop_sd   <- apply(pooled_prop_bootstraps, c(1, 2), sd,   na.rm = TRUE)
-    pooled_prop_cv   <- ifelse(pooled_prop_mean > 0, pooled_prop_sd / pooled_prop_mean, NA_real_)
+    pooled_prop_sd <- apply(pooled_prop_bootstraps, c(1, 2), sd, na.rm = TRUE)
+    pooled_prop_cv <- ifelse(pooled_prop_mean > 0, pooled_prop_sd / pooled_prop_mean, NA_real_)
 
     # Empirical 95% confidence intervals (percentiles), exclude 'composition'
     lf_ci_lower <- apply(lf_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
