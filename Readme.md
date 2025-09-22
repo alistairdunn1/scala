@@ -4,6 +4,8 @@ An R implementation for calculating scaled length compositions and age compositi
 
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
+**Note, this package is in development. Functionality may be not be fully complete in some cases.**
+
 [![R Package](https://img.shields.io/badge/R-package-blue.svg)](https://www.r-project.org/)
 [![Version](https://img.shields.io/badge/version-2025--08-orange.svg)](https://github.com/alistairdunn1/scala)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -294,7 +296,7 @@ This enables:
 
 For detailed documentation of any function, use `?function_name` in R (e.g., `?calculate_length_compositions`).
 
-### Ordinal Age-at-Length Modelling (Optional). WARNING: In development)
+### Ordinal Age-at-Length Modelling (Optional). WARNING: In development
 
 When raw age-length observations are available, you can fit a smooth ordinal age-at-length model and predict an ALK over desired lengths (and sex):
 
