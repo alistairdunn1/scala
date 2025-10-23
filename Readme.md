@@ -50,7 +50,7 @@ Supports both **commercial fisheries** (weight-based scaling) and **research sur
 install.packages(c("roxygen2", "devtools"))
 
 # Build and install the package
-devtools::install("alistairdunn1/scala", subdir = "scala")
+devtools::install_github("alistairdunn1/scala", subdir = "scala")
 
 # Or using R CMD (from command line)
 R CMD build scala
