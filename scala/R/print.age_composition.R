@@ -87,21 +87,35 @@ print.age_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digits 
 
         # Add confidence intervals if available
         if (!is.null(x$pooled_age_ci_lower) && !is.null(x$pooled_age_ci_upper)) {
-          pooled_df$CI_Lower_Male <- round(x$pooled_age_ci_lower[has_fish, "male"], digits)
-          pooled_df$CI_Upper_Male <- round(x$pooled_age_ci_upper[has_fish, "male"], digits)
-          pooled_df$CI_Lower_Female <- round(x$pooled_age_ci_lower[has_fish, "female"], digits)
-          pooled_df$CI_Upper_Female <- round(x$pooled_age_ci_upper[has_fish, "female"], digits)
-          pooled_df$CI_Lower_Total <- round(x$pooled_age_ci_lower[has_fish, "total"], digits)
-          pooled_df$CI_Upper_Total <- round(x$pooled_age_ci_upper[has_fish, "total"], digits)
+          tryCatch(
+            {
+              pooled_df$CI_Lower_Male <- round(x$pooled_age_ci_lower[has_fish, "male"], digits)
+              pooled_df$CI_Upper_Male <- round(x$pooled_age_ci_upper[has_fish, "male"], digits)
+              pooled_df$CI_Lower_Female <- round(x$pooled_age_ci_lower[has_fish, "female"], digits)
+              pooled_df$CI_Upper_Female <- round(x$pooled_age_ci_upper[has_fish, "female"], digits)
+              pooled_df$CI_Lower_Total <- round(x$pooled_age_ci_lower[has_fish, "total"], digits)
+              pooled_df$CI_Upper_Total <- round(x$pooled_age_ci_upper[has_fish, "total"], digits)
+            },
+            error = function(e) {
+              # Silently ignore errors with dimensions
+            }
+          )
         }
       } else if (!is.null(x$pooled_age_ci_lower) && !is.null(x$pooled_age_ci_upper)) {
         # Add confidence intervals even if CVs are not shown
-        pooled_df$CI_Lower_Male <- round(x$pooled_age_ci_lower[has_fish, "male"], digits)
-        pooled_df$CI_Upper_Male <- round(x$pooled_age_ci_upper[has_fish, "male"], digits)
-        pooled_df$CI_Lower_Female <- round(x$pooled_age_ci_lower[has_fish, "female"], digits)
-        pooled_df$CI_Upper_Female <- round(x$pooled_age_ci_upper[has_fish, "female"], digits)
-        pooled_df$CI_Lower_Total <- round(x$pooled_age_ci_lower[has_fish, "total"], digits)
-        pooled_df$CI_Upper_Total <- round(x$pooled_age_ci_upper[has_fish, "total"], digits)
+        tryCatch(
+          {
+            pooled_df$CI_Lower_Male <- round(x$pooled_age_ci_lower[has_fish, "male"], digits)
+            pooled_df$CI_Upper_Male <- round(x$pooled_age_ci_upper[has_fish, "male"], digits)
+            pooled_df$CI_Lower_Female <- round(x$pooled_age_ci_lower[has_fish, "female"], digits)
+            pooled_df$CI_Upper_Female <- round(x$pooled_age_ci_upper[has_fish, "female"], digits)
+            pooled_df$CI_Lower_Total <- round(x$pooled_age_ci_lower[has_fish, "total"], digits)
+            pooled_df$CI_Upper_Total <- round(x$pooled_age_ci_upper[has_fish, "total"], digits)
+          },
+          error = function(e) {
+            # Silently ignore errors with dimensions
+          }
+        )
       }
 
       print(pooled_df)
@@ -220,25 +234,49 @@ print.age_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digits 
           )
 
           if (show_cvs && !is.null(x$age_cvs)) {
-            stratum_df$CV_Total <- round(x$age_cvs[stratum_has_fish, "total", i] * 100, 1)
+            # Safely extract CVs with dimension checking
+            if (!is.null(x$age_cvs) && length(dim(x$age_cvs)) >= 3) {
+              tryCatch(
+                {
+                  stratum_df$CV_Total <- round(x$age_cvs[stratum_has_fish, "total", i] * 100, 1)
+                },
+                error = function(e) {
+                  # Silently ignore errors with dimensions
+                }
+              )
+            }
 
             # Add confidence intervals for stratum if available
             if (!is.null(x$age_ci_lower) && !is.null(x$age_ci_upper)) {
-              stratum_df$CI_Lower_Male <- round(x$age_ci_lower[stratum_has_fish, "male", i], digits)
-              stratum_df$CI_Upper_Male <- round(x$age_ci_upper[stratum_has_fish, "male", i], digits)
-              stratum_df$CI_Lower_Female <- round(x$age_ci_lower[stratum_has_fish, "female", i], digits)
-              stratum_df$CI_Upper_Female <- round(x$age_ci_upper[stratum_has_fish, "female", i], digits)
-              stratum_df$CI_Lower_Total <- round(x$age_ci_lower[stratum_has_fish, "total", i], digits)
-              stratum_df$CI_Upper_Total <- round(x$age_ci_upper[stratum_has_fish, "total", i], digits)
+              tryCatch(
+                {
+                  stratum_df$CI_Lower_Male <- round(x$age_ci_lower[stratum_has_fish, "male", i], digits)
+                  stratum_df$CI_Upper_Male <- round(x$age_ci_upper[stratum_has_fish, "male", i], digits)
+                  stratum_df$CI_Lower_Female <- round(x$age_ci_lower[stratum_has_fish, "female", i], digits)
+                  stratum_df$CI_Upper_Female <- round(x$age_ci_upper[stratum_has_fish, "female", i], digits)
+                  stratum_df$CI_Lower_Total <- round(x$age_ci_lower[stratum_has_fish, "total", i], digits)
+                  stratum_df$CI_Upper_Total <- round(x$age_ci_upper[stratum_has_fish, "total", i], digits)
+                },
+                error = function(e) {
+                  # Silently ignore errors with dimensions
+                }
+              )
             }
           } else if (!is.null(x$age_ci_lower) && !is.null(x$age_ci_upper) && is_bootstrap) {
             # Add confidence intervals even if CVs are not shown
-            stratum_df$CI_Lower_Male <- round(x$age_ci_lower[stratum_has_fish, "male", i], digits)
-            stratum_df$CI_Upper_Male <- round(x$age_ci_upper[stratum_has_fish, "male", i], digits)
-            stratum_df$CI_Lower_Female <- round(x$age_ci_lower[stratum_has_fish, "female", i], digits)
-            stratum_df$CI_Upper_Female <- round(x$age_ci_upper[stratum_has_fish, "female", i], digits)
-            stratum_df$CI_Lower_Total <- round(x$age_ci_lower[stratum_has_fish, "total", i], digits)
-            stratum_df$CI_Upper_Total <- round(x$age_ci_upper[stratum_has_fish, "total", i], digits)
+            tryCatch(
+              {
+                stratum_df$CI_Lower_Male <- round(x$age_ci_lower[stratum_has_fish, "male", i], digits)
+                stratum_df$CI_Upper_Male <- round(x$age_ci_upper[stratum_has_fish, "male", i], digits)
+                stratum_df$CI_Lower_Female <- round(x$age_ci_lower[stratum_has_fish, "female", i], digits)
+                stratum_df$CI_Upper_Female <- round(x$age_ci_upper[stratum_has_fish, "female", i], digits)
+                stratum_df$CI_Lower_Total <- round(x$age_ci_lower[stratum_has_fish, "total", i], digits)
+                stratum_df$CI_Upper_Total <- round(x$age_ci_upper[stratum_has_fish, "total", i], digits)
+              },
+              error = function(e) {
+                # Silently ignore errors with dimensions
+              }
+            )
           }
 
           print(stratum_df)

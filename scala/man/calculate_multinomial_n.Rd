@@ -13,6 +13,7 @@ calculate_multinomial_n(
   include_pooled = TRUE,
   remove_outliers = 0.05,
   min_proportion = 1e-04,
+  min_cv = 0,
   max_cv = 5,
   trace = FALSE,
   quiet = TRUE

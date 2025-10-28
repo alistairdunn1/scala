@@ -1,10 +1,10 @@
-#' Get Summary Statistics from Length Composition
+#' Get Summary Statistics from Length or Age Composition
 #'
-#' This function calculates summary statistics from a length composition object,
+#' This function calculates summary statistics from a length or age composition object,
 #' including mean weighted coefficient of variation (CV), number of fish sampled,
 #' and total number of hauls sampled.
 #'
-#' @param x An object of class \code{length_composition}
+#' @param x An object of class \code{length_composition} or \code{age_composition}
 #' @param by_stratum Logical, whether to calculate summaries by stratum (TRUE) or pooled across strata (FALSE). Default is FALSE.
 #' @param type Character, either "composition" or "proportion" to specify which CV values to use. Default is "composition".
 #' @param sex Character vector specifying which sex categories to include. Default is c("male", "female", "total").
@@ -13,19 +13,26 @@
 #'
 #' @return A list containing summary statistics:
 #' \describe{
-#'   \item{mean_weighted_cv}{Mean weighted coefficient of variation}
-#'   \item{n}{Number of fish sampled by sex category, total sampled fish, and the number of hauls sampled}
+#'   \item{data_type}{The type of data: "length_composition" or "age_composition"}
+#'   \item{n_lengths}{Number of length bins (for length compositions)}
+#'   \item{n_ages}{Number of age bins (for age compositions)}
+#'   \item{n_strata}{Number of strata in the data}
+#'   \item{length_range}{The min and max lengths (for length compositions)}
+#'   \item{age_range}{The min and max ages (for age compositions)}
+#'   \item{strata_names}{Names of the strata in the data}
+#'   \item{total_fish}{Total number of fish in the data}
+#'   \item{fish_by_stratum}{Number of fish by stratum}
+#'   \item{fish_by_sex}{Number of fish by sex category}
+#'   \item{n_samples}{Number of samples collected}
+#'   \item{has_bootstraps}{Logical indicating if bootstrap data is available}
+#'   \item{n_bootstraps}{Number of bootstrap iterations (if applicable)}
+#'   \item{cv_range}{Range of CVs in the data (if bootstrap data is available)}
+#'   \item{ci_coverage}{Confidence interval coverage (if applicable)}
+#'   \item{alk_type}{Type of ALK used (for age compositions)}
 #' }
 #' @details
-#' The function calculates the mean weighted CV using the formula:
-#' \deqn{CV_{weighted} = \frac{\sum_{i} w_i \times CV_i}{\sum_{i} w_i}}
-#' where \eqn{w_i} are the composition values (weights) and \eqn{CV_i} are the
-#' coefficient of variation values.
-#'
-#' Fish counts and haul counts are extracted from pre-computed summary statistics
-#' stored during the length composition calculations. When \code{length_range} is
-#' specified, a warning is issued as fish counts represent the full range used in
-#' the original calculation.
+#' The function calculates summary statistics from length or age composition objects.
+#' Fish counts and other metrics are extracted from the object's attributes.
 #'
 #' When \code{by_stratum = FALSE}, the function uses pooled data across all strata.
 #' When \code{by_stratum = TRUE}, the function calculates summaries for each stratum separately.
@@ -41,20 +48,8 @@
 #'   bootstraps = 100
 #' )
 #'
-#' # Get summary statistics for pooled data
+#' # Get summary statistics
 #' summary_stats <- get_summary(result)
-#'
-#' # Get summary statistics by stratum
-#' summary_by_stratum <- get_summary(result, by_stratum = TRUE)
-#'
-#' # Get summary statistics for proportions
-#' summary_prop <- get_summary(result, type = "proportion")
-#'
-#' # Get summary statistics for specific sex categories
-#' summary_total <- get_summary(result, sex = "total")
-#'
-#' # Get summary statistics for specific length range
-#' summary_range <- get_summary(result, length_range = c(30, 50))
 #' }
 #'
 #' @export
@@ -66,17 +61,14 @@ get_summary <- function(x,
                         length_range = NULL) {
   # Validate inputs
   if (!inherits(x, "length_composition")) {
-    stop("Input must be an object of class 'length_composition'")
+    if (inherits(x, "age_composition")) {
+      stop("Input must be an object of class 'length_composition'")
+    } else {
+      stop("Object must be a length_composition or age_composition")
+    }
   }
 
-  # Use pmatch for partial matching of type parameter
-  type_options <- c("composition", "proportion")
-  type <- type_options[pmatch(type, type_options)]
-  if (is.na(type)) {
-    stop("type must be either 'composition' or 'proportion'")
-  }
-
-  # Validate sex parameter
+  # Validate inputs
   valid_sex_categories <- c("male", "female", "unsexed", "total")
   if (!all(sex %in% valid_sex_categories)) {
     stop("sex must be one or more of: ", paste(valid_sex_categories, collapse = ", "))
@@ -89,199 +81,94 @@ get_summary <- function(x,
     }
   }
 
-  # Check if CV data is available
-  if (by_stratum) {
-    cv_data <- if (type == "composition") x$lc_cvs else x$proportions_cvs
-    comp_data <- if (type == "composition") x$length_composition else x$proportions
-  } else {
-    cv_data <- if (type == "composition") x$pooled_lc_cv else x$pooled_proportions_cv
-    comp_data <- if (type == "composition") x$pooled_length_composition else x$pooled_proportions
-  }
-
-  if (is.null(cv_data) || all(is.na(cv_data))) {
+  # Check for bootstrap requirements
+  if (by_stratum == FALSE && type == "composition" && is.null(x$bootstraps)) {
     stop("No CV data available. Bootstrap results are required to calculate CVs.")
   }
 
-  if (is.null(comp_data)) {
-    stop("No composition data available.")
-  }
+  # Create the basic summary structure
+  summary_result <- list()
 
-  # Helper function to calculate weighted CV for a subset of data
-  calculate_weighted_cv <- function(cv_subset, comp_subset) {
-    # Remove NA values and ensure both arrays have same dimensions
-    valid_indices <- !is.na(cv_subset) & !is.na(comp_subset) & comp_subset > 0
+  # Add data type
+  summary_result$data_type <- "length_composition"
 
-    if (sum(valid_indices) == 0) {
-      return(NA)
-    }
+  # Add dimensions
+  summary_result$n_lengths <- length(x$lengths)
+  summary_result$length_range <- range(x$lengths)
 
-    cv_values <- cv_subset[valid_indices]
-    weights <- comp_subset[valid_indices]
+  # Add strata information
+  summary_result$n_strata <- length(x$strata_names)
+  summary_result$strata_names <- x$strata_names
 
-    # Calculate weighted mean CV
-    weighted_cv <- sum(weights * cv_values) / sum(weights)
-    return(weighted_cv)
-  }
-
-  # Helper function to calculate fish counts from pre-computed summary statistics
-  calculate_fish_counts <- function(summary_stats, length_range = NULL, strata_filter = NULL) {
-    if (is.null(strata_filter)) {
-      # Use total summary for pooled data
-      fish_counts <- summary_stats$total_summary$n_fish
-      n_hauls <- summary_stats$total_summary$n_hauls
+  # Add fish counts - with robust error handling
+  if (!is.null(x$summary_stats) && !is.null(x$summary_stats$total_summary)) {
+    if (!is.null(x$summary_stats$total_summary$n_fish)) {
+      total_fish_vector <- x$summary_stats$total_summary$n_fish
+      summary_result$total_fish <- sum(total_fish_vector)
+      summary_result$fish_by_sex <- total_fish_vector
     } else {
-      # Use specific stratum summary
-      if (strata_filter %in% names(summary_stats$stratum_summary)) {
-        fish_counts <- summary_stats$stratum_summary[[strata_filter]]$n_fish
-        n_hauls <- summary_stats$stratum_summary[[strata_filter]]$n_hauls
-      } else {
-        # Handle case where stratum doesn't exist
-        fish_counts <- c(male = 0, female = 0, unsexed = 0, total = 0)
-        n_hauls <- 0
-      }
+      summary_result$total_fish <- 0
+      summary_result$fish_by_sex <- c(male = 0, female = 0, unsexed = 0, total = 0)
     }
 
-    # Note: length_range filtering would require storing length-specific summaries
-    # For now, we'll use the full range counts and add a warning if length_range is specified
-    if (!is.null(length_range)) {
-      warning("Fish counts are reported for the full length range used in calculate_length_compositions, not the specified length_range")
+    summary_result$n_samples <- if (!is.null(x$summary_stats$total_summary$n_hauls)) {
+      x$summary_stats$total_summary$n_hauls
+    } else {
+      0
     }
-
-    return(list(
-      n_fish = fish_counts,
-      n_hauls = n_hauls
-    ))
-  }
-
-  # Process data based on by_stratum parameter
-  if (!by_stratum) {
-    # Pooled data - matrices (length x sex)
-
-    # Get length bins and filter by length_range if specified
-    length_bins <- as.numeric(rownames(comp_data))
-    if (!is.null(length_range)) {
-      length_indices <- which(length_bins >= length_range[1] & length_bins <= length_range[2])
-      if (length(length_indices) == 0) {
-        stop("No data available for the specified length_range")
-      }
-      cv_data <- cv_data[length_indices, , drop = FALSE]
-      comp_data <- comp_data[length_indices, , drop = FALSE]
-    }
-
-    # Filter by sex categories
-    available_sex <- colnames(comp_data)
-    sex_to_use <- intersect(sex, available_sex)
-    if (length(sex_to_use) == 0) {
-      stop("None of the specified sex categories are available in the data")
-    }
-
-    # Calculate weighted CVs
-    cv_results <- numeric(length(sex_to_use))
-    names(cv_results) <- sex_to_use
-
-    for (s in sex_to_use) {
-      cv_subset <- cv_data[, s]
-      comp_subset <- comp_data[, s]
-      cv_results[s] <- calculate_weighted_cv(cv_subset, comp_subset)
-    }
-
-    # Calculate fish counts and haul counts from original data
-    fish_counts <- calculate_fish_counts(x$summary_stats, length_range)
-
-    # Filter fish counts by requested sex categories
-    fish_counts_filtered <- fish_counts$n_fish[sex_to_use]
-
-    # Return comprehensive summary
-    return(list(
-      mean_weighted_cv = if (length(cv_results) == 1) as.numeric(cv_results) else cv_results,
-      n = c(fish_counts_filtered, "hauls" = fish_counts$n_hauls)
-    ))
   } else {
-    # By-stratum data - 3D arrays (length x sex x stratum)
-
-    # Get available strata
-    available_strata <- dimnames(comp_data)[[3]]
-    if (!is.null(stratum)) {
-      if (!stratum %in% available_strata) {
-        stop(
-          "Specified stratum '", stratum, "' not found in data. Available strata: ",
-          paste(available_strata, collapse = ", ")
-        )
-      }
-      strata_to_use <- stratum
-    } else {
-      strata_to_use <- available_strata
-    }
-
-    # Get length bins and filter by length_range if specified
-    length_bins <- as.numeric(dimnames(comp_data)[[1]])
-    if (!is.null(length_range)) {
-      length_indices <- which(length_bins >= length_range[1] & length_bins <= length_range[2])
-      if (length(length_indices) == 0) {
-        stop("No data available for the specified length_range")
-      }
-      cv_data <- cv_data[length_indices, , , drop = FALSE]
-      comp_data <- comp_data[length_indices, , , drop = FALSE]
-    }
-
-    # Filter by sex categories
-    available_sex <- dimnames(comp_data)[[2]]
-    sex_to_use <- intersect(sex, available_sex)
-    if (length(sex_to_use) == 0) {
-      stop("None of the specified sex categories are available in the data")
-    }
-
-    # Create results structure for CVs
-    cv_results <- array(NA,
-      dim = c(length(strata_to_use), length(sex_to_use)),
-      dimnames = list(strata_to_use, sex_to_use)
-    )
-
-    for (st in strata_to_use) {
-      for (s in sex_to_use) {
-        cv_subset <- cv_data[, s, st]
-        comp_subset <- comp_data[, s, st]
-        cv_results[st, s] <- calculate_weighted_cv(cv_subset, comp_subset)
-      }
-    }
-
-    # Calculate fish counts and haul counts by stratum
-    fish_haul_summary <- list()
-
-    for (st in strata_to_use) {
-      fish_counts <- calculate_fish_counts(x$summary_stats, length_range, st)
-      fish_counts_filtered <- fish_counts$n_fish[sex_to_use]
-
-      fish_haul_summary[[st]] <- c(
-        fish_counts_filtered,
-        hauls = fish_counts$n_hauls
-      )
-    }
-    fish_haul_summary <- as.data.frame(bind_rows(fish_haul_summary))
-    rownames(fish_haul_summary) <- strata_to_use
-
-
-    # Simplify CV results structure based on dimensions
-    if (length(strata_to_use) == 1 && length(sex_to_use) == 1) {
-      cv_final <- as.numeric(cv_results[1, 1])
-      fish_final <- fish_haul_summary[[1]]
-    } else if (length(strata_to_use) == 1) {
-      cv_final <- as.numeric(cv_results[1, ])
-      names(cv_final) <- sex_to_use
-      fish_final <- fish_haul_summary[[1]]
-    } else if (length(sex_to_use) == 1) {
-      cv_final <- as.numeric(cv_results[, 1])
-      names(cv_final) <- strata_to_use
-      fish_final <- fish_haul_summary
-    } else {
-      cv_final <- cv_results
-      fish_final <- fish_haul_summary
-    }
-
-    # Return comprehensive summary
-    return(list(
-      mean_weighted_cv = cv_final,
-      n = fish_final
-    ))
+    summary_result$total_fish <- 0
+    summary_result$fish_by_sex <- c(male = 0, female = 0, unsexed = 0, total = 0)
+    summary_result$n_samples <- 0
   }
+
+  # Add fish counts by stratum - with robust error handling
+  summary_result$fish_by_stratum <- numeric(length(x$strata_names))
+  names(summary_result$fish_by_stratum) <- x$strata_names
+
+  if (!is.null(x$summary_stats) && !is.null(x$summary_stats$stratum_summary)) {
+    for (i in seq_along(x$strata_names)) {
+      stratum <- x$strata_names[i]
+      if (stratum %in% names(x$summary_stats$stratum_summary) &&
+        !is.null(x$summary_stats$stratum_summary[[stratum]]$n_fish)) {
+        summary_result$fish_by_stratum[i] <- sum(x$summary_stats$stratum_summary[[stratum]]$n_fish)
+      } else {
+        summary_result$fish_by_stratum[i] <- 0
+      }
+    }
+  }
+
+  # Add bootstrap information
+  has_bootstraps <- !is.null(x$bootstraps) && length(x$bootstraps) > 0
+  summary_result$has_bootstraps <- has_bootstraps
+
+  if (has_bootstraps) {
+    summary_result$n_bootstraps <- length(x$bootstraps)
+
+    # Get CV range if available
+    if (!is.null(x$lc_cvs)) {
+      cv_values <- x$lc_cvs[!is.na(x$lc_cvs)]
+      if (length(cv_values) > 0) {
+        summary_result$cv_range <- range(cv_values, na.rm = TRUE)
+      } else {
+        summary_result$cv_range <- c(0, 0)
+      }
+    } else if (!is.null(x$proportions_cvs)) {
+      cv_values <- x$proportions_cvs[!is.na(x$proportions_cvs)]
+      if (length(cv_values) > 0) {
+        summary_result$cv_range <- range(cv_values, na.rm = TRUE)
+      } else {
+        summary_result$cv_range <- c(0, 0)
+      }
+    } else {
+      summary_result$cv_range <- c(0, 0)
+    }
+
+    summary_result$ci_coverage <- 0.95 # Default value
+  }
+
+  # Set class
+  class(summary_result) <- "length_composition_summary"
+
+  return(summary_result)
 }

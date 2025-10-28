@@ -5,35 +5,41 @@
 \title{Compare Age-Length Keys from Modelled and Empirical Methods}
 \usage{
 compare_alks(
-  ordinal,
   empirical_alk,
+  model_alk,
   lengths = NULL,
   sexes = NULL,
-  plot = FALSE
+  visualize = FALSE,
+  verbose = FALSE
 )
 }
 \arguments{
-\item{ordinal}{An \code{ordinal_alk} object returned by \code{fit_ordinal_alk()}.}
-
 \item{empirical_alk}{A complete ALK from \code{create_alk()} (data.frame or
 named list of sex-specific data.frames) with columns: length, age, proportion, n (optional).}
+
+\item{model_alk}{An \code{ordinal_alk} object returned by \code{fit_ordinal_alk()}.}
 
 \item{lengths}{Optional numeric vector of lengths to compare. Defaults to the
 unique lengths present in \code{empirical_alk}.}
 
 \item{sexes}{Optional character vector of sex categories to compare when applicable
-(subset of ordinal$sex_levels and those present in empirical_alk). If NULL, use
+(subset of model_alk$sex_levels and those present in empirical_alk). If NULL, use
 their intersection.}
 
-\item{plot}{Logical, whether to return a ggplot heatmap of differences (default FALSE).}
+\item{visualize}{Logical, whether to return a ggplot heatmap of differences (default FALSE).}
+
+\item{verbose}{Logical, whether to display progress messages (default FALSE).}
 }
 \value{
 A list with components:
   \itemize{
-    \item \code{differences}: data.frame of per-cell differences with columns (length, age, sex, prop_empirical, prop_model, diff, abs_diff)
-    \item \code{by_length}: summary metrics by length (and sex if applicable): RMSE, MAE, MaxAbs
-    \item \code{overall}: overall summary metrics across compared cells
-    \item \code{plot}: ggplot object when \code{plot=TRUE}, otherwise NULL
+    \item \code{comparison_data}: data.frame of per-cell differences with columns (length, age, sex, empirical_prop, model_prop, difference, abs_difference)
+    \item \code{summary_stats}: summary metrics overall and by sex: RMSE, MAE, MaxAbs, correlation
+    \item \code{empirical_type}: Type of empirical ALK used
+    \item \code{model_type}: Type of model ALK used
+    \item \code{comparison_lengths}: Lengths used for comparison
+    \item \code{sex_categories}: Sex categories compared
+    \item \code{plot}: ggplot object when \code{visualize=TRUE}, otherwise NULL
   }
 }
 \description{

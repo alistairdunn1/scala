@@ -1,4 +1,4 @@
-rug <- T #' Plot alk (Age-Length Key)
+#' Plot alk (Age-Length Key)
 #'
 #' Creates a visualisation of the age-length key showing
 #' the probability distribution of ages for each length, with
@@ -31,12 +31,46 @@ plot_alk <- function(alk, by_sex = TRUE, type = "heatmap", rug = FALSE) {
   # Handle data structure based on by_sex parameter
   if (by_sex) {
     if (is.list(alk) && !is.data.frame(alk)) {
-      alk <- dplyr::bind_rows(alk, .id = "sex")
+      # Process each sex dataframe separately to ensure they work with bind_rows
+      processed_list <- list()
+      for (sex_name in names(alk)) {
+        sex_data <- alk[[sex_name]]
+        if (!is.null(sex_data) && nrow(sex_data) > 0) {
+          # Keep only essential columns
+          if (all(c("length", "age", "proportion") %in% names(sex_data))) {
+            processed_list[[sex_name]] <- sex_data[, c("length", "age", "proportion")]
+          }
+        }
+      }
+
+      # Now combine the processed data frames
+      if (length(processed_list) > 0) {
+        alk <- dplyr::bind_rows(processed_list, .id = "sex")
+      } else {
+        stop("No valid data found in the age-length key")
+      }
     }
   } else {
     if (is.list(alk) && !is.data.frame(alk)) {
       # For non-sex specific plotting, combine all data without sex column
-      alk <- dplyr::bind_rows(alk)
+      # First process each sex dataframe to ensure consistency
+      processed_list <- list()
+      for (sex_name in names(alk)) {
+        sex_data <- alk[[sex_name]]
+        if (!is.null(sex_data) && nrow(sex_data) > 0) {
+          # Keep only essential columns
+          if (all(c("length", "age", "proportion") %in% names(sex_data))) {
+            processed_list[[sex_name]] <- sex_data[, c("length", "age", "proportion")]
+          }
+        }
+      }
+
+      # Now combine the processed data frames
+      if (length(processed_list) > 0) {
+        alk <- dplyr::bind_rows(processed_list)
+      } else {
+        stop("No valid data found in the age-length key")
+      }
     }
   } # Create base plot
   if (type == "heatmap") {

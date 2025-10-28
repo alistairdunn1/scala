@@ -10,6 +10,7 @@ calculate_single_combination_internal(
   sex,
   remove_outliers,
   min_proportion,
+  min_cv,
   max_cv,
   trace
 )

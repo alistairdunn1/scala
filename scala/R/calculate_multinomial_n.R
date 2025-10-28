@@ -104,12 +104,13 @@ calculate_multinomial_n <- function(x,
                                     include_pooled = TRUE,
                                     remove_outliers = 0.05,
                                     min_proportion = 0.0001,
+                                    min_cv = 0.0,
                                     max_cv = 5.0,
                                     trace = FALSE,
                                     quiet = TRUE) {
   # Validate input
   if (!inherits(x, c("length_composition", "age_composition"))) {
-    stop("x must be a length_composition or age_composition object")
+    stop("Input must be a length_composition or age_composition object")
   }
 
   if (x$n_bootstraps == 0) {
@@ -120,7 +121,7 @@ calculate_multinomial_n <- function(x,
   if (all) {
     return(calculate_all_combinations_internal(
       x, sex_categories, include_pooled,
-      remove_outliers, min_proportion, max_cv, quiet
+      remove_outliers, min_proportion, min_cv, max_cv, quiet
     ))
   }
 
@@ -134,7 +135,7 @@ calculate_multinomial_n <- function(x,
   # Use internal function for single combination
   return(calculate_single_combination_internal(
     x, stratum, sex, remove_outliers,
-    min_proportion, max_cv, trace
+    min_proportion, min_cv, max_cv, trace
   ))
 }
 
@@ -169,7 +170,7 @@ print.multinomial_n <- function(x, ...) {
 #' Internal function to calculate all combinations
 #' @keywords internal
 calculate_all_combinations_internal <- function(x, sex_categories, include_pooled,
-                                                remove_outliers, min_proportion, max_cv, quiet) {
+                                                remove_outliers, min_proportion, min_cv, max_cv, quiet) {
   results_list <- list()
 
   # Get list of strata to analyse
@@ -189,6 +190,7 @@ calculate_all_combinations_internal <- function(x, sex_categories, include_poole
             sex = sex,
             remove_outliers = remove_outliers,
             min_proportion = min_proportion,
+            min_cv = min_cv,
             max_cv = max_cv,
             trace = FALSE
           )
@@ -241,7 +243,7 @@ calculate_all_combinations_internal <- function(x, sex_categories, include_poole
 #' Internal function to calculate single combination
 #' @keywords internal
 calculate_single_combination_internal <- function(x, stratum, sex, remove_outliers,
-                                                  min_proportion, max_cv, trace) {
+                                                  min_proportion, min_cv, max_cv, trace) {
   # Extract proportions and CVs based on stratum specification
   if (is.null(stratum)) {
     # Use pooled data across all strata
@@ -258,7 +260,7 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
         stop("No valid CV data found. Bootstrap results are required.")
       }
       bins <- x$lengths
-      analysis_type <- "pooled"
+      analysis_type <- "length_composition"
     } else { # age_composition
       proportions <- x$pooled_age_proportions[, sex]
       if (is.matrix(x$pooled_age_proportions_cv)) {
@@ -267,7 +269,7 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
         stop("No valid age proportion CV data found. Bootstrap results are required.")
       }
       bins <- x$ages
-      analysis_type <- "pooled"
+      analysis_type <- "age_composition"
     }
   } else {
     # Use specific stratum
@@ -286,7 +288,7 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
         stop("No valid CV data found for stratum-specific analysis.")
       }
       bins <- x$lengths
-      analysis_type <- paste("stratum", stratum)
+      analysis_type <- "length_composition"
     } else { # age_composition
       proportions <- x$age_proportions[, sex, stratum]
       if (is.array(x$age_proportions_cvs) && length(dim(x$age_proportions_cvs)) == 3) {
@@ -295,7 +297,7 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
         stop("No valid age proportion CV data found for stratum-specific analysis.")
       }
       bins <- x$ages
-      analysis_type <- paste("stratum", stratum)
+      analysis_type <- "age_composition"
     }
   }
 
@@ -308,7 +310,7 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
 
   # Filter out invalid values
   valid_idx <- (!is.na(data_df$proportion) & data_df$proportion > min_proportion) &
-    (!is.na(data_df$cv) & data_df$cv > 0 & data_df$cv <= max_cv)
+    (!is.na(data_df$cv) & data_df$cv >= min_cv & data_df$cv <= max_cv)
 
   if (sum(valid_idx) < 3) {
     bin_type <- if (inherits(x, "length_composition")) "length" else "age"
@@ -375,9 +377,9 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
       # Prepare results
       results <- list(
         effective_n = as.numeric(floor(n_estimate)),
-        proportions = valid_data$proportion,
-        cvs = valid_data$cv,
-        n_bins = nrow(valid_data),
+        proportions = as.numeric(valid_data$proportion),
+        cvs = as.numeric(valid_data$cv),
+        n_bins = as.numeric(nrow(valid_data)),
         fit_summary = summary(fit),
         analysis_type = analysis_type,
         sex = sex,

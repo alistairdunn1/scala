@@ -10,6 +10,7 @@ calculate_all_combinations_internal(
   include_pooled,
   remove_outliers,
   min_proportion,
+  min_cv,
   max_cv,
   quiet
 )

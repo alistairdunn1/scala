@@ -41,11 +41,12 @@
 #'
 #' @export
 print.length_composition <- function(x, show_cvs = TRUE, show_sexes = TRUE, digits = 2, ...) {
-  cat("Length Composition Results (Sex-based)\n")
-  cat("=====================================\n\n")
+  cat("Length Composition Summary\n")
+  cat("==========================\n\n")
+  cat("Data Type: Sex-based length compositions\n")
 
-  cat("Length range:", min(x$lengths), "to", max(x$lengths), "\n")
-  cat("Number of strata:", length(x$strata_names), "\n")
+  cat("Length Range:", min(x$lengths), "to", max(x$lengths), "\n")
+  cat("Strata:", length(x$strata_names), "\n")
   cat("Bootstrap iterations:", x$n_bootstraps, "\n")
   if (!is.null(x$scaling_type)) {
     scaling_desc <- ifelse(x$scaling_type == "weight", "Weight-based (commercial)", "Density-based (survey)")

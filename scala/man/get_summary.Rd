@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_summary.R
 \name{get_summary}
 \alias{get_summary}
-\title{Get Summary Statistics from Length Composition}
+\title{Get Summary Statistics from Length or Age Composition}
 \usage{
 get_summary(
   x,
@@ -14,7 +14,7 @@ get_summary(
 )
 }
 \arguments{
-\item{x}{An object of class \code{length_composition}}
+\item{x}{An object of class \code{length_composition} or \code{age_composition}}
 
 \item{by_stratum}{Logical, whether to calculate summaries by stratum (TRUE) or pooled across strata (FALSE). Default is FALSE.}
 
@@ -29,25 +29,32 @@ get_summary(
 \value{
 A list containing summary statistics:
 \describe{
-  \item{mean_weighted_cv}{Mean weighted coefficient of variation}
-  \item{n}{Number of fish sampled by sex category, total sampled fish, and the number of hauls sampled}
+  \item{data_type}{The type of data: "length_composition" or "age_composition"}
+  \item{n_lengths}{Number of length bins (for length compositions)}
+  \item{n_ages}{Number of age bins (for age compositions)}
+  \item{n_strata}{Number of strata in the data}
+  \item{length_range}{The min and max lengths (for length compositions)}
+  \item{age_range}{The min and max ages (for age compositions)}
+  \item{strata_names}{Names of the strata in the data}
+  \item{total_fish}{Total number of fish in the data}
+  \item{fish_by_stratum}{Number of fish by stratum}
+  \item{fish_by_sex}{Number of fish by sex category}
+  \item{n_samples}{Number of samples collected}
+  \item{has_bootstraps}{Logical indicating if bootstrap data is available}
+  \item{n_bootstraps}{Number of bootstrap iterations (if applicable)}
+  \item{cv_range}{Range of CVs in the data (if bootstrap data is available)}
+  \item{ci_coverage}{Confidence interval coverage (if applicable)}
+  \item{alk_type}{Type of ALK used (for age compositions)}
 }
 }
 \description{
-This function calculates summary statistics from a length composition object,
+This function calculates summary statistics from a length or age composition object,
 including mean weighted coefficient of variation (CV), number of fish sampled,
 and total number of hauls sampled.
 }
 \details{
-The function calculates the mean weighted CV using the formula:
-\deqn{CV_{weighted} = \frac{\sum_{i} w_i \times CV_i}{\sum_{i} w_i}}
-where \eqn{w_i} are the composition values (weights) and \eqn{CV_i} are the
-coefficient of variation values.
-
-Fish counts and haul counts are extracted from pre-computed summary statistics
-stored during the length composition calculations. When \code{length_range} is
-specified, a warning is issued as fish counts represent the full range used in
-the original calculation.
+The function calculates summary statistics from length or age composition objects.
+Fish counts and other metrics are extracted from the object's attributes.
 
 When \code{by_stratum = FALSE}, the function uses pooled data across all strata.
 When \code{by_stratum = TRUE}, the function calculates summaries for each stratum separately.
@@ -63,20 +70,8 @@ result <- calculate_length_compositions(
   bootstraps = 100
 )
 
-# Get summary statistics for pooled data
+# Get summary statistics
 summary_stats <- get_summary(result)
-
-# Get summary statistics by stratum
-summary_by_stratum <- get_summary(result, by_stratum = TRUE)
-
-# Get summary statistics for proportions
-summary_prop <- get_summary(result, type = "proportion")
-
-# Get summary statistics for specific sex categories
-summary_total <- get_summary(result, sex = "total")
-
-# Get summary statistics for specific length range
-summary_range <- get_summary(result, length_range = c(30, 50))
 }
 
 }

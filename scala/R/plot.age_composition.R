@@ -217,7 +217,15 @@ plot.age_composition <- function(x,
       }
     } else {
       # Simple results (no bootstrap)
-      comp_data <- apply(x$age_composition, c(1, 2), sum) # Sum across strata
+      # Check if age_composition exists and has the right structure
+      if (!is.null(x$age_composition) && length(dim(x$age_composition)) >= 3) {
+        comp_data <- apply(x$age_composition, c(1, 2), sum) # Sum across strata
+      } else if (!is.null(x$age_composition) && length(dim(x$age_composition)) == 2) {
+        comp_data <- x$age_composition
+      } else {
+        stop("Invalid age composition structure")
+      }
+
       ci_lower <- NULL
       ci_upper <- NULL
 
@@ -231,9 +239,7 @@ plot.age_composition <- function(x,
         total_counts <- sum(comp_data[, "total"])
         comp_data <- comp_data / total_counts
       }
-    }
-
-    # Convert to data frame for ggplot
+    } # Convert to data frame for ggplot
     plot_data_list <- list()
 
     # Define sex categories to include based on unsexed parameter
@@ -254,8 +260,19 @@ plot.age_composition <- function(x,
 
         # Add confidence intervals if available
         if (!is.null(ci_lower) && !is.null(ci_upper)) {
-          sex_data$ci_lower <- ci_lower[, sex_name]
-          sex_data$ci_upper <- ci_upper[, sex_name]
+          # Add confidence intervals with robust error handling
+          tryCatch(
+            {
+              sex_data$ci_lower <- ci_lower[, sex_name]
+              sex_data$ci_upper <- ci_upper[, sex_name]
+            },
+            error = function(e) {
+              # If there's any error with extracting CI data, just use NA values
+              warning(paste("Could not extract confidence intervals for", sex_name, ":", e$message))
+              sex_data$ci_lower <- NA
+              sex_data$ci_upper <- NA
+            }
+          )
         }
 
         plot_data_list[[sex_name]] <- sex_data

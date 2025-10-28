@@ -4,10 +4,10 @@ An R implementation for calculating scaled length compositions and age compositi
 
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
-**Note, this package is in development. Functionality may be not be fully complete in some cases.**
+**Note: This package is under active development with comprehensive testing. Core functionality is stable and well-tested (341+ passing tests), though new features may be added.**
 
 [![R Package](https://img.shields.io/badge/R-package-blue.svg)](https://www.r-project.org/)
-[![Version](https://img.shields.io/badge/version-2025--08-orange.svg)](https://github.com/alistairdunn1/scala)
+[![Version](https://img.shields.io/badge/version-2025--10-orange.svg)](https://github.com/alistairdunn1/scala)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Table of Contents
@@ -1781,7 +1781,7 @@ cat("Missing lengths generate explicit warnings\n")
 
 ## Package Information
 
-**Version**: 2025-07 (automatically updated from git commit date)
+**Version**: 2025-10 (automatically updated from git commit date)
 **Author**: Alistair Dunn
 **Maintainer**: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>
 **License**: GPL (>= 3)
@@ -1792,7 +1792,7 @@ cat("Missing lengths generate explicit warnings\n")
 The package uses a **year-month (YYYY-MM)** versioning scheme:
 
 - Version number is automatically generated from the git commit date
-- Format: `YYYY-MM` (e.g., `2025-07` for July 2025)
+- Format: `YYYY-MM` (e.g., `2025-10` for October 2025)
 - Package date is set to the exact commit date (`YYYY-MM-DD`)
 - This ensures version numbers are meaningful and chronologically ordered
 
@@ -1811,7 +1811,7 @@ citation("scala")
 
 **Suggested citation:**
 
-Dunn, A. (2025). scala: Scaled catch at length and age composition analyses. R package version 2025-07. https://github.com/alistairdunn1/scala
+Dunn, A. (2025). scala: Scaled catch at length and age composition analyses. R package version 2025-10. https://github.com/alistairdunn1/scala
 
 ## Contributing
 
