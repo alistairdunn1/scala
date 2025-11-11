@@ -107,11 +107,16 @@ resample_fish_data <- function(fish_data) {
 
     # Combine and filter out zero counts
     if (length(result_rows) > 0) {
-      result <- do.call(rbind, result_rows)
-      return(result[result$total > 0, ])
-    } else {
-      return(data.frame())
+      # Filter out NULL entries
+      valid_rows <- result_rows[!sapply(result_rows, is.null)]
+      if (length(valid_rows) > 0) {
+        result <- do.call(rbind, valid_rows)
+        if (!is.null(result) && nrow(result) > 0) {
+          return(result[result$total > 0, ])
+        }
+      }
     }
+    return(data.frame())
   }
 
   # Main resampling logic with optimized hierarchical approach
@@ -132,7 +137,11 @@ resample_fish_data <- function(fish_data) {
     # Step 1: Resample samples within stratum
     unique_samples <- unique(stratum_data$sample_id)
     n_samples <- length(unique_samples)
-    resampled_sample_ids <- sample(unique_samples, n_samples, replace = TRUE)
+    resampled_sample_ids <- if(length(unique_samples) == 1) {
+      rep(unique_samples, n_samples) 
+    } else {
+      sample(unique_samples, n_samples, replace = TRUE)
+    }
 
     # Step 2: For each resampled sample, resample fish counts using optimized method
     sample_results <- vector("list", n_samples)
@@ -149,7 +158,7 @@ resample_fish_data <- function(fish_data) {
       # Use optimized resampling for this sample
       resampled_sample <- resample_fish_counts_optimized(sample_data)
 
-      if (nrow(resampled_sample) > 0) {
+      if (!is.null(resampled_sample) && is.data.frame(resampled_sample) && nrow(resampled_sample) > 0) {
         # Update sample_id for resampled data
         resampled_sample$sample_id <- paste0(stratum, "_resample_", i)
         sample_results[[i]] <- resampled_sample
@@ -159,7 +168,7 @@ resample_fish_data <- function(fish_data) {
     }
 
     # Combine all samples for this stratum
-    valid_samples <- sample_results[sapply(sample_results, function(x) nrow(x) > 0)]
+    valid_samples <- sample_results[sapply(sample_results, function(x) !is.null(x) && is.data.frame(x) && nrow(x) > 0)]
     if (length(valid_samples) > 0) {
       resampled_list[[s]] <- do.call(rbind, valid_samples)
     } else {
@@ -168,7 +177,7 @@ resample_fish_data <- function(fish_data) {
   }
 
   # Filter out empty data frames and combine all strata
-  valid_strata <- resampled_list[sapply(resampled_list, function(x) nrow(x) > 0)]
+  valid_strata <- resampled_list[sapply(resampled_list, function(x) !is.null(x) && is.data.frame(x) && nrow(x) > 0)]
   if (length(valid_strata) > 0) {
     result <- do.call(rbind, valid_strata)
     # Reset row names
