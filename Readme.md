@@ -18,6 +18,8 @@ Supports both **commercial fisheries** (weight-based scaling) and **research sur
 - [Key Concepts](#key-concepts)
 - [Requirements](#requirements)
 - [Available Functions](#available-functions)
+- [Length Measurement Bias Correction](#length-measurement-bias-correction)
+- [Creating Complete Age-Length Keys](#creating-complete-age-length-keys)
 - [Input Data Format](#input-data-format)
 - [Usage](#usage)
 - [Data Visualisation](#data-visualisation)
@@ -205,26 +207,55 @@ The package supports two scaling approaches:
 
 The package provides the following main functions:
 
+### Core Analysis Functions
+
 - **`calculate_length_compositions()`**: Main function for calculating length compositions with optional bootstrap uncertainty estimation
 - **`calculate_age_compositions()`**: Convert length compositions to age compositions using age-length keys with **smart detection** for complete vs incomplete keys and **warning system** for missing length data
 - **`create_alk()`**: Create complete age-length keys from raw age data with interpolation/extrapolation for missing length-age combinations, supporting both single and sex-specific keys, length binning, and comprehensive sampling requirement analysis
-- **`evaluate_sample_sizes()`**: Evaluate whether sample sizes are adequate for reliable bootstrap uncertainty estimation by checking fish per sample and samples per stratum against recommended thresholds
-- **`filter_small_samples()`**: Create filtered datasets by excluding specific samples identified by sample evaluation (simplified interface)
-- **`generate_test_data()`**: Generate sample datasets for testing and examples
-- **`generate_commercial_test_data()`**: Generate commercial fisheries test data
-- **`generate_survey_test_data()`**: Generate research survey test data
-- **`generate_age_length_key()`**: Create sample age-length keys with various growth models
-- **`get_default_lw_params()`**: Get default length-weight parameters for testing
-- **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
 - **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from length or age composition proportions and CVs
+- **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
+
+### Age-Length Key Modelling
+
 - **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) and return a prediction function for age probabilities by length
 - **`fit_cohort_alk()`**: Fit a cohort-based ordinal GAM model to estimate year classes from length, year, and sex, with age back-calculation capability
 - **`compare_alks()`**: Compare age-length keys from empirical (`create_alk`) and model-based (`fit_ordinal_alk`) methods with summary metrics and optional visualisation
+- **`generate_age_length_key()`**: Create sample age-length keys with various growth models
+
+### Sample Size Evaluation
+
+- **`evaluate_sample_sizes()`**: Evaluate whether sample sizes are adequate for reliable bootstrap uncertainty estimation by checking fish per sample and samples per stratum against recommended thresholds
+- **`filter_small_samples()`**: Create filtered datasets by excluding specific samples identified by sample evaluation (simplified interface)
+
+### Length Measurement Bias Correction
+
+- **`diagnose_length_bias()`**: Detect preference for certain length values (e.g., multiples of 5) in fish measurement data, with diagnostic plots and statistical tests
+- **`correct_length_bias()`**: Apply smoothing corrections to reduce the effects of length measurement bias using smooth, jitter, or redistribute methods
+- **`adjust_age_length_key_bias()`**: Adjust age-length key proportions to account for known length measurement bias patterns
+- **`compare_length_distributions()`**: Create side-by-side comparison plots of original vs corrected length distributions
+
+### Test Data Generation
+
+- **`generate_test_data()`**: Generate sample datasets for testing and examples (wrapper for commercial/survey data)
+- **`generate_commercial_test_data()`**: Generate commercial fisheries test data (weight-based scaling)
+- **`generate_survey_test_data()`**: Generate research survey test data (density-based scaling)
+- **`generate_test_age_data()`**: Generate synthetic age-at-length data for testing age-length key functions
+
+### Parameter Functions
+
+- **`get_default_lw_params()`**: Get default length-weight parameters for testing
+- **`get_abundance_lw_params()`**: Get length-weight parameters that disable weight scaling for abundance-based (count) calculations instead of biomass-based scaling
+
+### Plotting Functions
+
 - **`plot.length_composition()`**: Create professional visualisations with lines and uncertainty ribbons (requires ggplot2)
 - **`plot.age_composition()`**: Visualise age compositions with uncertainty ribbons using **identical interface** to length plotting
+- **`plot_alk()`**: Visualise age-length keys as heatmaps or bubble plots, with optional y-axis rug showing length distribution
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison plots for multiple length composition results
-- **`plot_alk()`**: Visualise age-length keys as heatmaps or points (with optional y-axis rug for length distribution)
 - **`plot_sample_size_distribution()`**: Create stacked histograms showing sample size distributions by strata, with samples categorised by adequacy (non-representative small, representative small, adequate)
+
+### Utility Functions
+
 - **`resample_fish_data()`**: Internal function for bootstrap resampling
 
 ### Plotting Features
@@ -349,6 +380,72 @@ age_probs <- cohort_model$predict_age(lengths, sampling_year, sex)
 - **Robust Fitting**: Uses mgcv::ocat with cumulative logit link for stable ordinal modeling
 
 **Algorithm**: The model fits cohort ~ s(length) + s(year) with optional sex interactions, where cohorts are calculated using the configurable year class equation. This allows tracking of specific birth cohorts through time and estimation of cohort-specific length distributions.
+
+## Length Measurement Bias Correction
+
+Fisheries length data often exhibits measurement bias, particularly "digit preference" where measurers round to convenient values (typically multiples of 5). This package provides tools to diagnose and correct such biases.
+
+### Diagnosing Length Bias
+
+Use `diagnose_length_bias()` to detect and assess the severity of measurement bias:
+
+```r
+# Check for length measurement bias
+test_data <- generate_test_data()
+bias_check <- diagnose_length_bias(test_data$fish_data, modulus = 5, plot_results = TRUE)
+
+# View results
+print(bias_check$bias_severity)  # "None", "Mild", "Moderate", or "Strong"
+print(bias_check$preference_ratio)  # Ratio of preferred vs non-preferred lengths
+```
+
+The function returns:
+- **preference_ratio**: Ratio of mean frequency at preferred vs non-preferred lengths
+- **bias_severity**: Classification ("None", "Mild", "Moderate", "Strong")
+- **chi_square_test**: Statistical test for uniformity
+- **Diagnostic plots**: Histograms and frequency comparisons
+
+### Correcting Length Bias
+
+Apply corrections using `correct_length_bias()` with three methods:
+
+```r
+# Smooth method (recommended) - redistributes fish using rolling mean
+corrected_data <- correct_length_bias(test_data$fish_data, method = "smooth")
+
+# Jitter method - adds random noise to break up heaping
+corrected_data <- correct_length_bias(test_data$fish_data, method = "jitter")
+
+# Redistribute method - explicitly moves fish from over to under-represented lengths
+corrected_data <- correct_length_bias(test_data$fish_data, method = "redistribute")
+```
+
+### Comparing Distributions
+
+Visualise the effect of corrections:
+
+```r
+# Compare original vs corrected distributions
+compare_length_distributions(test_data$fish_data, corrected_data)
+```
+
+### Adjusting Age-Length Keys for Bias
+
+When length bias affects your age-length keys, use `adjust_age_length_key_bias()`:
+
+```r
+# Create age-length key
+alk <- generate_age_length_key(length_range = c(20, 40), age_range = c(1, 8))
+
+# Define bias pattern (multiples of 5 are over-represented by 50%)
+bias_pattern <- data.frame(
+  length = 20:40,
+  bias_factor = ifelse((20:40) %% 5 == 0, 1.5, 1.0)
+)
+
+# Adjust the age-length key
+adjusted_alk <- adjust_age_length_key_bias(alk, bias_pattern)
+```
 
 ## Creating Complete Age-Length Keys
 
@@ -904,6 +1001,51 @@ advanced_comparison <- plot_length_composition_comparison(
   show_CIs = TRUE
 )
 ```
+
+### Visualising Age-Length Keys
+
+The `plot_alk()` function creates visualisations of age-length keys showing the probability distribution of ages for each length.
+
+#### Basic Usage
+
+```r
+# Create an age-length key
+alk <- create_alk(
+  age_data = generate_test_age_data(),
+  lengths = 15:35,
+  ages = 1:8
+)
+
+# Heatmap visualisation (default)
+plot_alk(alk, type = "heatmap")
+
+# Bubble plot showing sample sizes
+plot_alk(alk, type = "points")
+
+# Add length distribution rug on y-axis
+plot_alk(alk, type = "heatmap", rug = TRUE)
+```
+
+#### Plot Types
+
+- **`type = "heatmap"`** (default): Colour-coded tiles showing age probabilities at each length, with darker colours indicating higher probabilities
+- **`type = "points"`**: Bubble plot where point size represents sample size (n) or proportion
+
+#### Sex-Specific Visualisation
+
+```r
+# Plot with sex-specific facets (default when sex data available)
+plot_alk(alk, by_sex = TRUE)
+
+# Combined plot without sex separation
+plot_alk(alk, by_sex = FALSE)
+```
+
+#### Options
+
+- **`by_sex`**: Logical, whether to facet by sex category (default TRUE)
+- **`type`**: "heatmap" or "points" for different visualisation styles
+- **`rug`**: Logical, add a rug plot on the y-axis showing length distribution (default FALSE)
 
 ## Uncertainty Analysis
 
