@@ -9,12 +9,14 @@
 #' @param type Character, type of plot: "heatmap" for heatmap visualization
 #'   or "points" for point plot (default "heatmap")
 #' @param rug Logical, whether to add a rug plot on the y-axis showing length distribution (default FALSE)
+#' @param raw_data Optional data frame containing raw age-length observations with columns 'age', 'length',
+#'   and optionally 'sex'. If provided, a red loess smoothing line will be added to the plot.
 #'
 #' @return ggplot2 object
 #' @export
-#' @importFrom ggplot2 ggplot aes geom_tile geom_point geom_rug scale_fill_viridis_c scale_size_continuous labs theme_minimal
+#' @importFrom ggplot2 ggplot aes geom_tile geom_point geom_rug scale_fill_viridis_c scale_size_continuous labs theme_minimal geom_smooth
 #' @importFrom rlang .data
-plot_alk <- function(alk, by_sex = TRUE, type = "heatmap", rug = FALSE) {
+plot_alk <- function(alk, by_sex = TRUE, type = "heatmap", rug = FALSE, raw_data = NULL) {
   # Check if ggplot2 is available
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("ggplot2 is required for plotting. Install with: install.packages('ggplot2')")
@@ -123,6 +125,37 @@ plot_alk <- function(alk, by_sex = TRUE, type = "heatmap", rug = FALSE) {
       data = rug_data, ggplot2::aes(y = .data$length),
       inherit.aes = FALSE, alpha = 0.5, sides = "l", colour = "royalblue"
     )
+  }
+
+  # Add loess smoothing line if raw data is provided
+  if (!is.null(raw_data)) {
+    # Validate raw_data has required columns
+    if (!all(c("age", "length") %in% names(raw_data))) {
+      warning("raw_data must contain 'age' and 'length' columns. Loess line not added.")
+    } else {
+      # Handle sex-specific data if by_sex is TRUE
+      if (by_sex && "sex" %in% names(raw_data)) {
+        # Filter raw_data to match the format expected
+        loess_data <- raw_data[, c("age", "length", "sex")]
+      } else if (!by_sex) {
+        # Use raw data without sex column
+        loess_data <- raw_data[, c("age", "length")]
+      } else {
+        # by_sex is TRUE but no sex column in raw_data
+        loess_data <- raw_data[, c("age", "length")]
+      }
+      
+      # Add loess smoothing line
+      p <- p + ggplot2::geom_smooth(
+        data = loess_data,
+        ggplot2::aes(x = .data$age, y = .data$length),
+        method = "loess",
+        se = FALSE,
+        colour = "red",
+        linewidth = 1,
+        inherit.aes = FALSE
+      )
+    }
   }
 
   if (by_sex) {
