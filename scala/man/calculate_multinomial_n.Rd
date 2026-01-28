@@ -36,6 +36,8 @@ calculate_multinomial_n(
 
 \item{min_proportion}{Numeric, minimum proportion threshold to include in analysis (default 0.0001)}
 
+\item{min_cv}{Numeric, minimum CV threshold to include in analysis (default 0.0)}
+
 \item{max_cv}{Numeric, maximum CV threshold to include in analysis (default 5.0)}
 
 \item{trace}{Logical, whether to show fitting details (default FALSE)}

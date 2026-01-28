@@ -26,6 +26,7 @@
 #'     \item \code{sex_categories}: Sex categories compared
 #'     \item \code{plot}: ggplot object when \code{visualize=TRUE}, otherwise NULL
 #'   }
+#' @importFrom stats cor
 #' @export
 compare_alks <- function(empirical_alk, model_alk, lengths = NULL, sexes = NULL, visualize = FALSE, verbose = FALSE) {
   # For backward compatibility, rename variables

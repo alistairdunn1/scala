@@ -9,6 +9,7 @@
 #' @param include_pooled Logical, whether to include pooled results when all = TRUE (default TRUE)
 #' @param remove_outliers Numeric, proportion of outliers to remove (0-1). Default 0.05 removes worst 5 percent of fits
 #' @param min_proportion Numeric, minimum proportion threshold to include in analysis (default 0.0001)
+#' @param min_cv Numeric, minimum CV threshold to include in analysis (default 0.0)
 #' @param max_cv Numeric, maximum CV threshold to include in analysis (default 5.0)
 #' @param trace Logical, whether to show fitting details (default FALSE)
 #' @param quiet Logical, whether to suppress individual fitting messages when all = TRUE (default TRUE)

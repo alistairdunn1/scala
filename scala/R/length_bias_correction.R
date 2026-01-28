@@ -6,7 +6,7 @@
 #' @name length_bias_correction
 #' @aliases length_bias_correction
 #'
-#' @importFrom dplyr "%>%" count arrange mutate left_join select rename group_by ungroup
+#' @importFrom dplyr "%>%" count arrange mutate left_join select rename group_by ungroup n
 #' @importFrom zoo rollmean
 #' @importFrom stats chisq.test ecdf quantile runif
 #' @importFrom graphics hist plot abline legend boxplot lines par

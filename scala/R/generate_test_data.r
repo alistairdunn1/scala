@@ -138,6 +138,7 @@ generate_survey_test_data <- function() {
 #' @param n_samples Number of fish samples to generate
 #' @param include_year Whether to include year column for cohort analysis (default TRUE)
 #' @return Data frame with age, length, sex, and optionally year columns
+#' @importFrom stats rnorm
 #' @export
 generate_test_age_data <- function(n_samples = 100, include_year = TRUE) {
   set.seed(789)

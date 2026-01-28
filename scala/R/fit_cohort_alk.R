@@ -84,7 +84,7 @@
 #' }
 #'
 #' @importFrom mgcv gam s
-#' @importFrom stats predict model.matrix
+#' @importFrom stats predict model.matrix AIC as.formula
 #' @seealso \code{\link{fit_ordinal_alk}}, \code{\link{create_alk}}, \code{\link[mgcv]{gam}}
 #' @export
 fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, by_sex = TRUE,
