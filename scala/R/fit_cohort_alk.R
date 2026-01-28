@@ -114,6 +114,11 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     stop("by_sex = TRUE requires 'sex' column in cohort_data")
   }
 
+  # Standardize sex categories to lowercase to avoid case sensitivity issues
+  if ("sex" %in% names(cohort_data)) {
+    cohort_data$sex <- tolower(cohort_data$sex)
+  }
+
   # Validate age_offset
   if (!is.numeric(age_offset) || length(age_offset) != 1) {
     stop("age_offset must be a single numeric value")

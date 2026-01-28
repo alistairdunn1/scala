@@ -370,8 +370,14 @@ calculate_age_compositions <- function(x,
 
       # Process batch of bootstraps
       for (b in batch_indices) {
+        # Extract bootstrap and ensure it's 3D (length x sex x stratum)
+        boot_lc <- x$lc_bootstraps[, , , b, drop = FALSE]
+        boot_dimnames <- dimnames(boot_lc)[1:3]  # Save dimension names
+        dim(boot_lc) <- dim(boot_lc)[1:3]  # Keep only first 3 dimensions
+        dimnames(boot_lc) <- boot_dimnames  # Restore dimension names
+        
         boot_result <- apply_age_length_key(
-          length_comp = x$lc_bootstraps[, , , b],
+          length_comp = boot_lc,
           age_length_key = age_length_key,
           ages = ages,
           lengths = x$lengths,
@@ -457,7 +463,9 @@ calculate_age_compositions <- function(x,
         total_col_idx <- which(dimnames(data_array)[[2]] == total_col_name)
 
         # Extract totals for all strata and bootstraps at once
-        totals <- data_array[, total_col_idx, , ] # [age, stratum, bootstrap]
+        totals <- data_array[, total_col_idx, , , drop = FALSE] # [age, 1, stratum, bootstrap]
+        # Remove the singleton dimension (column dimension)
+        dim(totals) <- c(dims[1], dims[3], dims[4]) # [age, stratum, bootstrap]
         stratum_totals <- apply(totals, c(2, 3), sum) # [stratum, bootstrap]
 
         # Vectorized division - broadcast totals across ages and sex categories

@@ -146,6 +146,11 @@ create_alk <- function(age_data,
   # Determine if sex-specific analysis is needed
   has_sex <- "sex" %in% names(age_data) && !all(is.na(age_data$sex))
 
+  # Standardize sex categories to lowercase to avoid case sensitivity issues
+  if (has_sex) {
+    age_data$sex <- tolower(age_data$sex)
+  }
+
   # Create age-length key from raw data
   if (has_sex) {
     if (verbose) cat("Creating sex-specific age-length keys from raw data...\n")
@@ -170,8 +175,12 @@ create_alk <- function(age_data,
       age_length_key[[sex_cat]] <- counts[, c("length", "age", "proportion", "n")]
     }
 
-    # Create combined unsexed key (males + females)
-    if (length(age_length_key) >= 2) {
+    # Create combined unsexed key (males + females) only if unsexed doesn't already exist
+    # Check for any case variation of "unsexed" in the sex categories
+    existing_sex_cats <- tolower(names(age_length_key))
+    has_unsexed <- "unsexed" %in% existing_sex_cats
+
+    if (length(age_length_key) >= 2 && !has_unsexed) {
       if (verbose) cat("Creating combined male+female age-length key for unsexed fish...\n")
 
       # Combine all sex-specific data

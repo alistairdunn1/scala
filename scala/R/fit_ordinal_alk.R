@@ -174,6 +174,11 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
     stop("by_sex = TRUE requires 'sex' column in ALK data")
   }
 
+  # Standardize sex categories to lowercase to avoid case sensitivity issues
+  if ("sex" %in% names(alk_data)) {
+    alk_data$sex <- tolower(alk_data$sex)
+  }
+
   # Convert age to ordered factor then integer 1..K for mgcv::ocat
   alk_data$age <- as.ordered(alk_data$age)
   age_levels <- levels(alk_data$age)

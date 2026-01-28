@@ -1,8 +1,8 @@
 Package: scala
 Type: Package
 Title: Scaled catch at length and age composition analyses
-Version: 2025-10
-Date: 2025-10-28
+Version: 2026-01
+Date: 2026-01-26
 Author: Alistair Dunn [aut, cre]
 Maintainer: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>
 Description: Scaled Catch at length and Age Compositions (scala) is an  implementation for calculating scaled length compositions from fisheries sampling data, supporting sex-based analysis and bootstrap uncertainty estimation. 
@@ -10,7 +10,7 @@ License: GPL (>= 3)
 URL: https://github.com/alistairdunn1/scala
 BugReports: https://github.com/alistairdunn1/scala/issues
 Encoding: UTF-8
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends: 
     R (>= 4.0.0),
     ggplot2,
