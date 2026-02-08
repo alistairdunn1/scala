@@ -245,7 +245,7 @@ The package provides the following main functions:
 
 - **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) with optional additional smooth terms, and return a prediction function for age probabilities by length
 - **`fit_cohort_alk()`**: Fit a cohort-based ordinal GAM model to estimate year classes from length, year, and sex, with optional additional smooth terms and age back-calculation capability for multi-year datasets
-- **`assign_ages_from_cohort()`**: Assign ages to individual fish observations using predictions from a fitted cohort model (mode, expected, or random assignment)
+- **`assign_ages_from_cohort()`**: Assign ages to individual fish observations using predictions from a fitted cohort model (mode, expected, or random assignment). Supports predicting ages for years with length data but no age data via `predict_missing = TRUE`
 - **`calculate_age_compositions_from_cohort()`**: Calculate scaled age compositions from cohort model-assigned ages using the same scaling methodology as length compositions
 - **`compare_alks()`**: Compare age-length keys from empirical (`create_alk`) and model-based (`fit_ordinal_alk`) methods with summary metrics and optional visualisation
 - **`generate_age_length_key()`**: Create sample age-length keys with various growth models
@@ -460,6 +460,7 @@ fish_with_ages <- assign_ages_from_cohort(
   fish_data = raw_fish_data,
   cohort_model = cohort_model,
   method = "mode",      # "mode", "expected", or "random"
+  predict_missing = TRUE, # Also predict for years without age data
   verbose = TRUE
 )
 
@@ -475,6 +476,7 @@ table(fish_with_ages$age)
 
 **Additional Options**:
 
+- `predict_missing`: When `TRUE`, predict ages for all years in the fish data, including years not present in the cohort model's training data (i.e., years with length observations but no age data). When `FALSE` (default), fish from non-training years are assigned `NA`. The cohort model interpolates/extrapolates from surrounding year classes to fill these gaps.
 - `seed`: Set random seed for reproducible sampling (when method = "random")
 - `keep_probabilities`: Retain all age probabilities in output (default FALSE)
 
@@ -537,7 +539,8 @@ cohort_model <- fit_cohort_alk(
 fish_with_ages <- assign_ages_from_cohort(
   fish_data = full_fish_data,
   cohort_model = cohort_model,
-  method = "mode"
+  method = "mode",
+  predict_missing = TRUE  # Include years with length data but no age data
 )
 
 # Step 3: Calculate scaled age compositions

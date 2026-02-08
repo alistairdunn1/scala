@@ -12,6 +12,12 @@
 #'     \item \code{"expected"}: Assign the expected age (weighted mean of probabilities)
 #'     \item \code{"random"}: Randomly sample age based on probabilities
 #'   }
+#' @param predict_missing Logical, whether to predict ages for years not present in the
+#'   cohort model's training data (default FALSE). When TRUE, the cohort model will
+#'   predict ages for all years in \code{fish_data}, including gap years that had
+#'   length observations but no age data. When FALSE, only fish from years present
+#'   in the training data will receive predicted ages; fish from other years will
+#'   be assigned NA.
 #' @param seed Integer, random seed for reproducible sampling when method = "random" (default NULL)
 #' @param keep_probabilities Logical, whether to keep all age probabilities in output (default FALSE)
 #' @param verbose Logical, whether to print progress messages (default TRUE)
@@ -83,6 +89,7 @@
 assign_ages_from_cohort <- function(fish_data,
                                     cohort_model,
                                     method = c("mode", "expected", "random"),
+                                    predict_missing = FALSE,
                                     seed = NULL,
                                     keep_probabilities = FALSE,
                                     verbose = TRUE,
@@ -152,10 +159,39 @@ assign_ages_from_cohort <- function(fish_data,
     }
   }
 
+  # Determine which rows to predict based on predict_missing setting
+  fish_years <- unique(fish_data$year)
+  training_years <- cohort_model$training_years
+  missing_years <- setdiff(fish_years, training_years)
+
+  if (length(missing_years) > 0) {
+    if (predict_missing) {
+      if (verbose) {
+        cat(
+          "predict_missing = TRUE: predicting ages for all years including",
+          length(missing_years), "year(s) without age data:",
+          paste(sort(missing_years), collapse = ", "), "\n"
+        )
+      }
+      predict_rows <- seq_len(nrow(fish_data))
+    } else {
+      if (verbose) {
+        cat(
+          "Skipping", length(missing_years), "year(s) not in training data:",
+          paste(sort(missing_years), collapse = ", "),
+          "\n  Set predict_missing = TRUE to predict ages for these years.\n"
+        )
+      }
+      predict_rows <- which(fish_data$year %in% training_years)
+    }
+  } else {
+    predict_rows <- seq_len(nrow(fish_data))
+  }
+
   if (verbose) {
     cat("Assigning ages using cohort model...\n")
     cat("Method:", method, "\n")
-    cat("Observations:", nrow(fish_data), "\n")
+    cat("Observations:", nrow(fish_data), "(", length(predict_rows), "to predict)\n")
   }
 
   # Set seed for reproducibility if using random method
@@ -163,19 +199,22 @@ assign_ages_from_cohort <- function(fish_data,
     set.seed(seed)
   }
 
-  # Get age probabilities for all fish
+  # Get age probabilities for rows to predict
   # Build predict_age arguments, including any additional term variables
   predict_args <- list(
-    lengths = fish_data$length,
-    sampling_years = fish_data$year
+    lengths = fish_data$length[predict_rows],
+    sampling_years = fish_data$year[predict_rows]
   )
 
   if (cohort_model$by_sex) {
-    predict_args$sex <- fish_data$sex
+    predict_args$sex <- fish_data$sex[predict_rows]
   }
 
-  # Append additional variables (from ... or extracted from fish_data)
-  predict_args <- c(predict_args, extra_args)
+  # Append additional variables (from ... or extracted from fish_data), subsetted to predict_rows
+  predict_extra <- lapply(extra_args, function(v) {
+    if (length(v) == nrow(fish_data)) v[predict_rows] else v
+  })
+  predict_args <- c(predict_args, predict_extra)
 
   age_probs <- do.call(cohort_model$predict_age, predict_args)
 
@@ -194,30 +233,34 @@ assign_ages_from_cohort <- function(fish_data,
   }
 
   # Assign ages based on method
-  assigned_ages <- rep(NA_real_, nrow(age_probs))
+  assigned_ages_subset <- rep(NA_real_, nrow(age_probs))
   valid_rows <- setdiff(seq_len(nrow(age_probs)), zero_prob_rows)
 
   if (length(valid_rows) > 0) {
     if (method == "mode") {
       # Assign most probable age
-      assigned_ages[valid_rows] <- age_values[apply(age_probs[valid_rows, , drop = FALSE], 1, which.max)]
+      assigned_ages_subset[valid_rows] <- age_values[apply(age_probs[valid_rows, , drop = FALSE], 1, which.max)]
     } else if (method == "expected") {
       # Assign expected age (weighted mean), rounded to nearest integer
-      assigned_ages[valid_rows] <- round(rowSums(sweep(
+      assigned_ages_subset[valid_rows] <- round(rowSums(sweep(
         age_probs[valid_rows, , drop = FALSE], 2, age_values, "*"
       )))
     } else if (method == "random") {
       # Sample age from probability distribution
       # Guard: sample(x) with length-1 numeric x is interpreted as sample(1:x)
       if (length(age_values) == 1) {
-        assigned_ages[valid_rows] <- age_values
+        assigned_ages_subset[valid_rows] <- age_values
       } else {
         for (i in valid_rows) {
-          assigned_ages[i] <- sample(age_values, size = 1, prob = age_probs[i, ])
+          assigned_ages_subset[i] <- sample(age_values, size = 1, prob = age_probs[i, ])
         }
       }
     }
   }
+
+  # Map predicted ages back to full fish_data (NA for rows not predicted)
+  assigned_ages <- rep(NA_real_, nrow(fish_data))
+  assigned_ages[predict_rows] <- assigned_ages_subset
 
   # Add assigned ages to fish_data
   result <- fish_data
@@ -225,10 +268,13 @@ assign_ages_from_cohort <- function(fish_data,
 
   # Optionally keep probability columns
   if (keep_probabilities) {
-    prob_df <- as.data.frame(age_probs)
-    names(prob_df) <- paste0("age_prob_", age_values)
-    result <- cbind(result, prob_df)
+    prob_df_full <- as.data.frame(matrix(NA_real_, nrow = nrow(fish_data), ncol = ncol(age_probs)))
+    names(prob_df_full) <- paste0("age_prob_", age_values)
+    prob_df_full[predict_rows, ] <- as.data.frame(age_probs)
+    result <- cbind(result, prob_df_full)
   }
+
+  n_skipped <- nrow(fish_data) - length(predict_rows)
 
   if (verbose) {
     valid_ages <- assigned_ages[!is.na(assigned_ages)]
@@ -237,8 +283,11 @@ assign_ages_from_cohort <- function(fish_data,
       cat("Age range:", min(valid_ages), "to", max(valid_ages), "\n")
       cat("Mean age:", round(mean(valid_ages), 2), "\n")
     }
+    if (n_skipped > 0) {
+      cat("NOTE:", n_skipped, "observations in non-training years assigned NA age\n")
+    }
     if (length(zero_prob_rows) > 0) {
-      cat("WARNING:", length(zero_prob_rows), "observations assigned NA age\n")
+      cat("WARNING:", length(zero_prob_rows), "observations assigned NA age (zero probability)\n")
     }
   }
 

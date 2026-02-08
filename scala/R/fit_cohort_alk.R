@@ -265,8 +265,9 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     cat("Deviance explained:", round(summary(gam_model)$dev.expl * 100, 1), "%\n")
   }
 
-  # Store year range for validation
+  # Store year range and unique training years for validation
   year_range <- range(cohort_data$year)
+  training_years <- sort(unique(cohort_data$year))
 
   # Create cohort prediction function
   predict_cohort <- function(lengths, years, sex = NULL, ...) {
@@ -507,6 +508,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     cohorts = as.numeric(cohort_levels), # renamed from 'cohort_levels' to 'cohorts' to match tests
     sex_levels = sex_levels,
     year_range = year_range,
+    training_years = training_years,
     age_offset = age_offset,
     additional_terms = additional_terms
   )
@@ -533,6 +535,7 @@ print.cohort_alk <- function(x, ...) {
   cat("  Age offset:", x$age_offset, "(YC = (Year - Age) -", x$age_offset, ")\n")
   cat("  Cohort levels:", paste(x$cohorts, collapse = ", "), "\n")
   cat("  Year range:", paste(x$year_range, collapse = " - "), "\n")
+  cat("  Training years:", paste(x$training_years, collapse = ", "), "\n")
   cat("  Family: Ordered categorical (cumulative logit)\n\n")
 
   cat("Model fit:\n")

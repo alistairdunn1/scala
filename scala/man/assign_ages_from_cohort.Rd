@@ -8,6 +8,7 @@ assign_ages_from_cohort(
   fish_data,
   cohort_model,
   method = c("mode", "expected", "random"),
+  predict_missing = FALSE,
   seed = NULL,
   keep_probabilities = FALSE,
   verbose = TRUE
@@ -25,6 +26,13 @@ Additional columns (e.g., stratum, sample_id, counts) will be preserved.}
   \item \code{"expected"}: Assign the expected age (weighted mean of probabilities)
   \item \code{"random"}: Randomly sample age based on probabilities
 }}
+
+\item{predict_missing}{Logical, whether to predict ages for years not present in the
+cohort model's training data (default FALSE). When TRUE, the cohort model will
+predict ages for all years in \code{fish_data}, including gap years that had
+length observations but no age data. When FALSE, only fish from years present
+in the training data will receive predicted ages; fish from other years will
+be assigned NA.}
 
 \item{seed}{Integer, random seed for reproducible sampling when method = "random" (default NULL)}
 

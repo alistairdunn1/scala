@@ -62,6 +62,7 @@ A list containing:
     \item \code{cohort_levels}: Vector of cohort levels in the model
     \item \code{sex_levels}: Vector of sex levels (if applicable)
     \item \code{year_range}: Range of years in training data
+    \item \code{training_years}: Vector of unique years present in the training data
     \item \code{age_offset}: The age offset used in cohort calculation
   }
 }
