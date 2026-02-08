@@ -15,6 +15,10 @@
 #' @param seed Integer, random seed for reproducible sampling when method = "random" (default NULL)
 #' @param keep_probabilities Logical, whether to keep all age probabilities in output (default FALSE)
 #' @param verbose Logical, whether to print progress messages (default TRUE)
+#' @param ... Additional named arguments passed through to the cohort model's \code{predict_age} function.
+#'   These are required when the model was fitted with \code{additional_terms} (e.g., spatial or temporal covariates).
+#'   The values should be vectors of the same length as \code{nrow(fish_data)},
+#'   or alternatively the corresponding columns can be included directly in \code{fish_data}.
 #'
 #' @return Data frame with original columns plus:
 #'   \itemize{
@@ -37,6 +41,10 @@
 #'
 #' The function handles sex-specific models automatically. If the cohort model was fitted
 #' with \code{by_sex = TRUE}, sex information must be present in fish_data.
+#'
+#' If the model was fitted with \code{additional_terms} (e.g., \code{"te(lat, long)"}),
+#' the corresponding variables must be supplied either as columns in \code{fish_data}
+#' or as named arguments via \code{...}.
 #'
 #' @examples
 #' \dontrun{
@@ -77,7 +85,8 @@ assign_ages_from_cohort <- function(fish_data,
                                     method = c("mode", "expected", "random"),
                                     seed = NULL,
                                     keep_probabilities = FALSE,
-                                    verbose = TRUE) {
+                                    verbose = TRUE,
+                                    ...) {
   # Validate inputs
   if (!is.data.frame(fish_data)) {
     stop("fish_data must be a data frame")
@@ -106,6 +115,43 @@ assign_ages_from_cohort <- function(fish_data,
     fish_data$sex <- tolower(fish_data$sex)
   }
 
+  # Collect additional arguments for models fitted with additional_terms
+  extra_args <- list(...)
+
+  # Auto-extract additional term variables from fish_data columns if not in ...
+  if (!is.null(cohort_model$additional_terms) && length(cohort_model$additional_terms) > 0) {
+    # Extract variable names from additional_terms (e.g., "te(lat, long)" -> c("lat", "long"))
+    # Handles nested expressions like te(lat, long, k = c(8, 8)) correctly
+    term_vars <- unique(unlist(lapply(cohort_model$additional_terms, function(term) {
+      # Remove the outer function call: "te(lat, long, k = c(8, 8))" -> "lat, long, k = c(8, 8)"
+      inner <- sub("^[^(]+\\(", "", term)
+      inner <- sub("\\)$", "", inner)
+      # Remove all nested parenthetical expressions (e.g., "c(8, 8)") to avoid
+      # splitting on commas inside them
+      repeat {
+        reduced <- gsub("\\([^()]*\\)", "", inner)
+        if (reduced == inner) break
+        inner <- reduced
+      }
+      # Split on comma, strip whitespace, and remove named arguments (contain '=')
+      parts <- trimws(strsplit(inner, ",")[[1]])
+      parts <- parts[!grepl("=", parts)]
+      # Remove empty strings and anything that isn't a valid R variable name
+      parts <- parts[nzchar(parts) & grepl("^[a-zA-Z._][a-zA-Z0-9._]*$", parts)]
+      parts
+    })))
+
+    for (var in term_vars) {
+      if (!var %in% names(extra_args)) {
+        if (var %in% names(fish_data)) {
+          extra_args[[var]] <- fish_data[[var]]
+        } else {
+          stop("Variable '", var, "' required by additional_terms is not in fish_data or ...")
+        }
+      }
+    }
+  }
+
   if (verbose) {
     cat("Assigning ages using cohort model...\n")
     cat("Method:", method, "\n")
@@ -118,18 +164,20 @@ assign_ages_from_cohort <- function(fish_data,
   }
 
   # Get age probabilities for all fish
+  # Build predict_age arguments, including any additional term variables
+  predict_args <- list(
+    lengths = fish_data$length,
+    sampling_years = fish_data$year
+  )
+
   if (cohort_model$by_sex) {
-    age_probs <- cohort_model$predict_age(
-      lengths = fish_data$length,
-      sampling_years = fish_data$year,
-      sex = fish_data$sex
-    )
-  } else {
-    age_probs <- cohort_model$predict_age(
-      lengths = fish_data$length,
-      sampling_years = fish_data$year
-    )
+    predict_args$sex <- fish_data$sex
   }
+
+  # Append additional variables (from ... or extracted from fish_data)
+  predict_args <- c(predict_args, extra_args)
+
+  age_probs <- do.call(cohort_model$predict_age, predict_args)
 
   # Extract age values from column names (e.g., "age_1" -> 1)
   age_values <- as.numeric(gsub("age_", "", colnames(age_probs)))
@@ -138,9 +186,11 @@ assign_ages_from_cohort <- function(fish_data,
   row_sums <- rowSums(age_probs)
   zero_prob_rows <- which(row_sums == 0 | !is.finite(row_sums))
   if (length(zero_prob_rows) > 0) {
-    warning(length(zero_prob_rows), " observation(s) had zero age probability ",
-            "(fish may be outside the model's length/year range). ",
-            "These will be assigned NA age.")
+    warning(
+      length(zero_prob_rows), " observation(s) had zero age probability ",
+      "(fish may be outside the model's length/year range). ",
+      "These will be assigned NA age."
+    )
   }
 
   # Assign ages based on method
