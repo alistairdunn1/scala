@@ -11,6 +11,9 @@ fit_cohort_alk(
   by_sex = TRUE,
   k_length = -1,
   k_year = -1,
+  additional_terms = NULL,
+  select = TRUE,
+  gamma = 1.4,
   method = "REML",
   weights = NULL,
   verbose = TRUE
@@ -29,6 +32,18 @@ Each row represents one aged fish with known sampling year.}
 \item{k_length}{Basis dimension for length smooth terms (default -1 for automatic selection)}
 
 \item{k_year}{Basis dimension for year smooth terms (default -1 for automatic selection)}
+
+\item{additional_terms}{Character vector of additional GAM formula terms to include in the model (default NULL).
+Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
+When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.}
+
+\item{select}{Logical, whether to add an extra penalty to each smooth term allowing
+terms to be penalized to zero (variable selection). Recommended for models with
+multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.}
+
+\item{gamma}{Numeric multiplier for the effective degrees of freedom in the smoothing
+parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
+help guard against overfitting (default 1.4, following Wood 2006 recommendation).}
 
 \item{method}{Smoothing parameter estimation method for mgcv (default "REML")}
 

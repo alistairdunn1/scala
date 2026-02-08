@@ -8,6 +8,15 @@
 #'   'age', 'length', and optionally 'sex'. Each row represents one aged fish.
 #' @param by_sex Logical, whether to fit sex-specific smooth terms (default TRUE)
 #' @param k Basis dimension for smooth terms (default -1 for automatic selection)
+#' @param additional_terms Character vector of additional GAM formula terms to include in the model (default NULL).
+#'   Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
+#'   When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.
+#' @param select Logical, whether to add an extra penalty to each smooth term allowing
+#'   terms to be penalized to zero (variable selection). Recommended for models with
+#'   multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.
+#' @param gamma Numeric multiplier for the effective degrees of freedom in the smoothing
+#'   parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
+#'   help guard against overfitting (default 1.4, following Wood 2006 recommendation).
 #' @param method Smoothing parameter estimation method for mgcv (default "REML")
 #' @param weights Optional weights for observations (default NULL)
 #' @param verbose Logical, whether to print model fitting details (default TRUE)
@@ -74,7 +83,9 @@
 #' @seealso \code{\link{create_alk}}, \code{\link{calculate_age_compositions}}, \code{\link[mgcv]{gam}}
 #' @export
 
-fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", weights = NULL, verbose = TRUE) {
+fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, additional_terms = NULL,
+                            select = TRUE, gamma = 1.4,
+                            method = "REML", weights = NULL, verbose = TRUE) {
   # Check if mgcv is available
   if (!requireNamespace("mgcv", quietly = TRUE)) {
     stop("mgcv package is required for ordinal age-length modeling. Install with: install.packages('mgcv')")
@@ -109,6 +120,13 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
     stop("by_sex = TRUE requires 'sex' column in ALK data")
   }
 
+  # Validate additional_terms
+  if (!is.null(additional_terms)) {
+    if (!is.character(additional_terms)) {
+      stop("additional_terms must be a character vector")
+    }
+  }
+
   # Standardize sex categories to lowercase to avoid case sensitivity issues
   if ("sex" %in% names(alk_data)) {
     alk_data$sex <- tolower(alk_data$sex)
@@ -133,23 +151,53 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
     if (verbose) cat("Sex levels:", paste(sex_levels, collapse = ", "), "\n")
   }
 
-  # Build model formula, include k only if > 0
+  # Determine appropriate k value based on data if not specified
+  if (k <= 0) {
+    n_unique_lengths <- length(unique(alk_data$length))
+    k <- min(10, max(3, floor(n_unique_lengths / 3)))
+  }
+
+  if (verbose) cat("Using k =", k, "for length terms\n")
+
+  # Build model formula dynamically
   if (by_sex) {
-    if (is.numeric(k) && k > 0) {
-      formula <- as.formula(paste0("age ~ s(length, by = sex, k = ", k, ") + sex"))
-      if (verbose) cat("Model formula: age ~ s(length, by = sex, k = ", k, ") + sex\n", sep = "")
-    } else {
-      formula <- age ~ s(length, by = sex) + sex
-      if (verbose) cat("Model formula: age ~ s(length, by = sex) + sex\n")
+    formula_parts <- c()
+    
+    # Length terms
+    formula_parts <- c(formula_parts, paste0("s(length, by = sex, k = ", k, ")"))
+    
+    # Add additional terms with by = sex interaction
+    if (!is.null(additional_terms)) {
+      for (term in additional_terms) {
+        # Check if term already has 'by =' specification
+        if (grepl("by\\s*=", term)) {
+          formula_parts <- c(formula_parts, term)
+        } else {
+          # Insert 'by = sex' before the closing parenthesis
+          modified_term <- sub("\\)\\s*$", ", by = sex)", term)
+          formula_parts <- c(formula_parts, modified_term)
+        }
+      }
     }
+    
+    # Add sex main effect
+    formula_parts <- c(formula_parts, "sex")
+    
+    formula <- as.formula(paste("age ~", paste(formula_parts, collapse = " + ")))
+    if (verbose) cat("Model formula: age ~", paste(formula_parts, collapse = " + "), "\n")
   } else {
-    if (is.numeric(k) && k > 0) {
-      formula <- as.formula(paste0("age ~ s(length, k = ", k, ")"))
-      if (verbose) cat("Model formula: age ~ s(length, k = ", k, ")\n", sep = "")
-    } else {
-      formula <- age ~ s(length)
-      if (verbose) cat("Model formula: age ~ s(length)\n")
+    formula_parts <- c()
+    
+    # Length terms
+    formula_parts <- c(formula_parts, paste0("s(length, k = ", k, ")"))
+    
+    # Add additional terms as-is
+    if (!is.null(additional_terms)) {
+      formula_parts <- c(formula_parts, additional_terms)
     }
+    
+    formula <- as.formula(paste("age ~", paste(formula_parts, collapse = " + ")))
+    if (verbose) cat("Model formula: age ~", paste(formula_parts, collapse = " + "), "\n")
   }
 
   # Fit the ordinal GAM model
@@ -162,7 +210,9 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
         data = alk_data,
         family = mgcv::ocat(R = length(age_levels)), # Ordered categorical with cumulative logit
         weights = weights,
-        method = method
+        method = method,
+        select = select,
+        gamma = gamma
       )
     },
     error = function(e) {
@@ -176,7 +226,10 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
   }
 
   # Create prediction function
-  predict_function <- function(lengths, sex = NULL) {
+  predict_function <- function(lengths, sex = NULL, ...) {
+    # Capture additional arguments for spatial/temporal variables
+    extra_args <- list(...)
+    
     # Validate inputs
     if (!is.numeric(lengths)) {
       stop("lengths must be numeric")
@@ -210,6 +263,13 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
       )
     } else {
       newdata <- data.frame(length = lengths)
+    }
+    
+    # Add any additional variables from extra_args to newdata
+    if (length(extra_args) > 0) {
+      for (var_name in names(extra_args)) {
+        newdata[[var_name]] <- extra_args[[var_name]]
+      }
     }
 
     # Predict per-age probabilities, preferring type='response' if available
@@ -320,7 +380,8 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, method = "REML", we
     deviance_explained = model_summary$deviance_explained * 100, # extract and convert to percentage
     by_sex = by_sex,
     ages = ages_numeric, # renamed from 'age_levels' to 'ages' to match tests
-    sex_levels = sex_levels
+    sex_levels = sex_levels,
+    additional_terms = additional_terms
   )
 
   class(result) <- "ordinal_alk"

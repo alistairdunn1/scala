@@ -11,6 +11,15 @@
 #' @param by_sex Logical, whether to fit sex-specific smooth terms (default TRUE)
 #' @param k_length Basis dimension for length smooth terms (default -1 for automatic selection)
 #' @param k_year Basis dimension for year smooth terms (default -1 for automatic selection)
+#' @param additional_terms Character vector of additional GAM formula terms to include in the model (default NULL).
+#'   Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
+#'   When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.
+#' @param select Logical, whether to add an extra penalty to each smooth term allowing
+#'   terms to be penalized to zero (variable selection). Recommended for models with
+#'   multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.
+#' @param gamma Numeric multiplier for the effective degrees of freedom in the smoothing
+#'   parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
+#'   help guard against overfitting (default 1.4, following Wood 2006 recommendation).
 #' @param method Smoothing parameter estimation method for mgcv (default "REML")
 #' @param weights Optional weights for observations (default NULL)
 #' @param verbose Logical, whether to print model fitting details (default TRUE)
@@ -88,7 +97,9 @@
 #' @seealso \code{\link{fit_ordinal_alk}}, \code{\link{create_alk}}, \code{\link[mgcv]{gam}}
 #' @export
 fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, by_sex = TRUE,
-                           k_length = -1, k_year = -1, method = "REML", weights = NULL, verbose = TRUE) {
+                           k_length = -1, k_year = -1, additional_terms = NULL,
+                           select = TRUE, gamma = 1.4,
+                           method = "REML", weights = NULL, verbose = TRUE) {
   # Handle alternative parameter name
   if (is.null(cohort_data) && !is.null(alk_data)) {
     cohort_data <- alk_data
@@ -112,6 +123,13 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   # Check for sex column if by_sex is TRUE
   if (by_sex && !"sex" %in% names(cohort_data)) {
     stop("by_sex = TRUE requires 'sex' column in cohort_data")
+  }
+
+  # Validate additional_terms
+  if (!is.null(additional_terms)) {
+    if (!is.character(additional_terms)) {
+      stop("additional_terms must be a character vector")
+    }
   }
 
   # Standardize sex categories to lowercase to avoid case sensitivity issues
@@ -181,6 +199,20 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     # Year terms
     formula_parts <- c(formula_parts, paste0("s(year, by = sex, k = ", k_year, ")"))
 
+    # Add additional terms with by = sex interaction
+    if (!is.null(additional_terms)) {
+      for (term in additional_terms) {
+        # Check if term already has 'by =' specification
+        if (grepl("by\\s*=", term)) {
+          formula_parts <- c(formula_parts, term)
+        } else {
+          # Insert 'by = sex' before the closing parenthesis
+          modified_term <- sub("\\)\\s*$", ", by = sex)", term)
+          formula_parts <- c(formula_parts, modified_term)
+        }
+      }
+    }
+
     # Add sex main effect
     formula_parts <- c(formula_parts, "sex")
 
@@ -198,6 +230,11 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     # Year terms
     formula_parts <- c(formula_parts, paste0("s(year, k = ", k_year, ")"))
 
+    # Add additional terms as-is
+    if (!is.null(additional_terms)) {
+      formula_parts <- c(formula_parts, additional_terms)
+    }
+
     formula <- as.formula(paste("cohort ~", paste(formula_parts, collapse = " + ")))
 
     if (verbose) {
@@ -213,7 +250,9 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
         data = cohort_data,
         family = mgcv::ocat(R = length(cohort_levels)), # Ordered categorical
         weights = weights,
-        method = method
+        method = method,
+        select = select,
+        gamma = gamma
       )
     },
     error = function(e) {
@@ -230,7 +269,10 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   year_range <- range(cohort_data$year)
 
   # Create cohort prediction function
-  predict_cohort <- function(lengths, years, sex = NULL) {
+  predict_cohort <- function(lengths, years, sex = NULL, ...) {
+    # Capture additional arguments for spatial/temporal variables
+    extra_args <- list(...)
+
     # Validate inputs
     if (!is.numeric(lengths) || !is.numeric(years)) {
       stop("lengths and years must be numeric")
@@ -272,6 +314,13 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
         length = lengths,
         year = years
       )
+    }
+
+    # Add any additional variables from extra_args to newdata
+    if (length(extra_args) > 0) {
+      for (var_name in names(extra_args)) {
+        newdata[[var_name]] <- extra_args[[var_name]]
+      }
     }
 
     # Use the same prediction logic as fit_ordinal_alk
@@ -355,7 +404,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   }
 
   # Create age back-calculation function
-  predict_age <- function(lengths, sampling_years, sex = NULL) {
+  predict_age <- function(lengths, sampling_years, sex = NULL, ...) {
     # Validate inputs
     if (!is.numeric(lengths) || !is.numeric(sampling_years)) {
       stop("lengths and sampling_years must be numeric")
@@ -371,7 +420,8 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     }
 
     # Get cohort probabilities for each length at each sampling year
-    cohort_probs <- predict_cohort(lengths, sampling_years, sex)
+    # Pass through any additional spatial/temporal arguments
+    cohort_probs <- predict_cohort(lengths, sampling_years, sex, ...)
 
     # Convert cohort probabilities to age probabilities
     # age = sampling_year - cohort + 1, so cohort = sampling_year - age + 1
@@ -457,7 +507,8 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     cohorts = as.numeric(cohort_levels), # renamed from 'cohort_levels' to 'cohorts' to match tests
     sex_levels = sex_levels,
     year_range = year_range,
-    age_offset = age_offset
+    age_offset = age_offset,
+    additional_terms = additional_terms
   )
 
   class(result) <- "cohort_alk"

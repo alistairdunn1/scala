@@ -4,7 +4,7 @@
 \alias{plot_alk}
 \title{Plot alk (Age-Length Key)}
 \usage{
-plot_alk(alk, by_sex = TRUE, type = "heatmap", rug = FALSE)
+plot_alk(alk, by_sex = TRUE, type = "heatmap", rug = FALSE, raw_data = NULL)
 }
 \arguments{
 \item{alk}{Age-length key data frame}
@@ -15,6 +15,9 @@ plot_alk(alk, by_sex = TRUE, type = "heatmap", rug = FALSE)
 or "points" for point plot (default "heatmap")}
 
 \item{rug}{Logical, whether to add a rug plot on the y-axis showing length distribution (default FALSE)}
+
+\item{raw_data}{Optional data frame containing raw age-length observations with columns 'age', 'length',
+and optionally 'sex'. If provided, a red loess smoothing line will be added to the plot.}
 }
 \value{
 ggplot2 object

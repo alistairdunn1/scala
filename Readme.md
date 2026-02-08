@@ -4,7 +4,7 @@ An R implementation for calculating scaled length compositions and age compositi
 
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
-**Note: This package is under active development with comprehensive testing. Core functionality is stable and well-tested (341+ passing tests), though new features may be added.**
+**Note: This package is under active development with comprehensive testing. Core functionality is stable and well-tested (341+ passing tests), though new features may be added.**
 
 [![R Package](https://img.shields.io/badge/R-package-blue.svg)](https://www.r-project.org/)
 [![Version](https://img.shields.io/badge/version-2025--10-orange.svg)](https://github.com/alistairdunn1/scala)
@@ -18,6 +18,7 @@ Supports both **commercial fisheries** (weight-based scaling) and **research sur
 - [Key Concepts](#key-concepts)
 - [Requirements](#requirements)
 - [Available Functions](#available-functions)
+- [Cohort-Based Age Composition Workflow](#cohort-based-age-composition-workflow)
 - [Length Measurement Bias Correction](#length-measurement-bias-correction)
 - [Creating Complete Age-Length Keys](#creating-complete-age-length-keys)
 - [Input Data Format](#input-data-format)
@@ -141,6 +142,30 @@ age_results <- calculate_age_compositions(
 # View age composition results
 print(age_results)
 
+# Alternative: Cohort-based age composition workflow (for multi-year data)
+# 1. Fit cohort model on aged subsample
+aged_data <- generate_test_age_data()
+aged_data$year <- sample(2018:2022, nrow(aged_data), replace = TRUE)
+cohort_model <- fit_cohort_alk(alk_data = aged_data, by_sex = TRUE)
+
+# 2. Assign ages to full dataset
+fish_with_ages <- assign_ages_from_cohort(
+  fish_data = test_data$fish_data,
+  cohort_model = cohort_model,
+  method = "mode"
+)
+
+# 3. Calculate scaled age compositions
+age_results_cohort <- calculate_age_compositions_from_cohort(
+  fish_data = fish_with_ages,
+  strata_data = test_data$strata_data,
+  age_range = c(1, 10),
+  lw_params_male = lw_params$male,
+  lw_params_female = lw_params$female,
+  lw_params_unsexed = lw_params$unsexed,
+  bootstraps = 100
+)
+
 # Create publication-quality plots with lines and uncertainty ribbons
 if (requireNamespace("ggplot2", quietly = TRUE)) {
   # Length composition plots
@@ -162,6 +187,7 @@ This tool calculates scaled length compositions and age compositions from fish s
 3. **Scaling across strata**: Combining strata to get total population estimates
 4. **Bootstrap resampling**: Providing uncertainty estimates through resampling procedures
 5. **Age composition conversion**: Converting length compositions to age compositions using complete age-length keys with streamlined workflow and clear warnings for incomplete data
+6. **Cohort-based age assignment**: Direct age assignment to individual fish using cohort models for multi-year datasets, followed by scaled age composition calculations
 
 ## Key Concepts
 
@@ -217,8 +243,10 @@ The package provides the following main functions:
 
 ### Age-Length Key Modelling
 
-- **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) and return a prediction function for age probabilities by length
-- **`fit_cohort_alk()`**: Fit a cohort-based ordinal GAM model to estimate year classes from length, year, and sex, with age back-calculation capability
+- **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) with optional additional smooth terms, and return a prediction function for age probabilities by length
+- **`fit_cohort_alk()`**: Fit a cohort-based ordinal GAM model to estimate year classes from length, year, and sex, with optional additional smooth terms and age back-calculation capability for multi-year datasets
+- **`assign_ages_from_cohort()`**: Assign ages to individual fish observations using predictions from a fitted cohort model (mode, expected, or random assignment)
+- **`calculate_age_compositions_from_cohort()`**: Calculate scaled age compositions from cohort model-assigned ages using the same scaling methodology as length compositions
 - **`compare_alks()`**: Compare age-length keys from empirical (`create_alk`) and model-based (`fit_ordinal_alk`) methods with summary metrics and optional visualisation
 - **`generate_age_length_key()`**: Create sample age-length keys with various growth models
 
@@ -350,36 +378,217 @@ pred_alk <- cbind(
 Notes:
 
 - Uses mgcv::ocat with cumulative logit; returns a robust prediction function.
+- Uses `select = TRUE` and `gamma = 1.4` by default for regularisation and overfitting protection.
+- The basis dimension `k` is chosen adaptively from the data when left at the default (-1): `min(10, max(3, floor(n_unique_lengths / 3)))`.
+- Supports `additional_terms` for extra covariates (e.g., spatial or temporal terms).
 - Probabilities are normalized per row and non-negative; ages increase with length on average.
 
-### Cohort-Based Age-at-Length Modelling (Optional). WARNING: In development)
+### Cohort-Based Age Composition Workflow
 
-When raw age-length-year observations are available, you can fit a cohort-based ordinal GAM model to estimate year classes from length, year, and optionally sex:
+The package provides a complete workflow for calculating scaled age compositions using cohort-based modelling. This approach is particularly powerful for multi-year datasets where cohort tracking provides temporal coherence in age assignments.
+
+#### Overview
+
+The cohort workflow consists of three steps:
+
+1. **Fit cohort model** on aged subsample using `fit_cohort_alk()`
+2. **Assign ages** to all fish using `assign_ages_from_cohort()`
+3. **Calculate scaled age compositions** using `calculate_age_compositions_from_cohort()`
+
+This approach directly assigns ages to individual fish observations and then applies the same scaling methodology used in length composition calculations, providing a seamless integration with existing workflows.
+
+#### Step 1: Fit Cohort Model
 
 ```r
-# Fit cohort model from raw age-length-year data 
-cohort_model <- fit_cohort_alk(alk_data = age_data, by_sex = TRUE, age_offset = 1)
+# Your aged subsample needs: age, length, year, sex (optional)
+aged_data <- data.frame(
+  age = c(2, 3, 3, 4, 5),
+  length = c(25, 30, 32, 38, 42),
+  year = c(2020, 2020, 2021, 2021, 2022),
+  sex = c("male", "female", "male", "female", "male")
+)
 
-# Predict cohort probabilities for given lengths and years
-lengths <- c(30, 35, 40)
-years <- c(2018, 2019, 2020)
-sex <- rep("female", length(lengths))
-cohort_probs <- cohort_model$predict_cohort(lengths, years, sex)
+# Fit cohort model
+cohort_model <- fit_cohort_alk(
+  alk_data = aged_data,
+  by_sex = TRUE,        # Fit sex-specific growth patterns
+  age_offset = 1,       # Year class = (Year - Age) - 1
+  verbose = TRUE
+)
 
-# Back-calculate age probabilities for a specific sampling year
-sampling_year <- 2020
-age_probs <- cohort_model$predict_age(lengths, sampling_year, sex)
+# View model summary
+print(cohort_model)
+```
+
+**Key Parameters**:
+
+- `by_sex`: Whether to fit sex-specific smooth terms (recommended if you have sex data)
+- `age_offset`: Year class offset (default 1, meaning YC = Year - Age - 1)
+- `k_length`, `k_year`: Basis dimensions for smooth terms (auto-selected by default; see below)
+- `select`: Whether to add an extra penalty allowing smooth terms to be penalized to zero for variable selection (default TRUE)
+- `gamma`: Multiplier for effective degrees of freedom in smoothing parameter selection; values > 1 produce smoother models (default 1.4, following Wood 2006)
+- `additional_terms`: Optional character vector of extra GAM formula terms (e.g., `"te(lat, long)"`, `"s(day_of_year, bs = 'cc')"`) -- automatically fitted with `by = sex` interactions when `by_sex = TRUE`
+- `method`: Smoothing parameter estimation method (default "REML")
+
+**Basis dimension (`k`) selection**:
+
+The `k` parameter controls the maximum complexity (wiggliness) of each smooth term. When left at the default (`-1`), both `fit_ordinal_alk()` and `fit_cohort_alk()` choose `k` adaptively based on the data:
+
+- **Length terms** (`k` / `k_length`): `min(10, max(3, floor(n_unique_lengths / 3)))` -- uses one-third of the unique length values, clamped between 3 and 10.
+- **Year terms** (`k_year`, cohort model only): `min(10, max(3, floor(n_unique_years / 2)))` -- uses half of the unique year values, clamped between 3 and 10. For very short time series (<= 3 years), `k_year` is further restricted to at most `n_unique_years - 1`.
+
+These defaults provide enough flexibility to capture non-linear relationships while avoiding overfitting in small datasets. Users can override them by passing explicit positive values. The actual `k` values used are printed when `verbose = TRUE`.
+
+**Model Features**:
+
+- Fits cohort ~ s(length) + s(year) with optional sex interactions
+- Uses mgcv::ocat with cumulative logit link for stable ordinal modelling
+- Uses `select = TRUE` and `gamma = 1.4` by default for regularisation and overfitting protection
+- Provides two prediction functions: `predict_cohort()` and `predict_age()`
+- Automatically handles sex-specific growth patterns
+- Validates year range and data structure
+
+**Important**: Do not use `predict(cohort_model$model)` directly -- it returns the raw cumulative logit linear predictor for cohorts, not ages. Always use `cohort_model$predict_age()` which converts cohort probabilities to age probabilities.
+
+#### Step 2: Assign Ages to Fish Data
+
+```r
+# Your fish data needs: length, year, sex (if model was fitted with by_sex=TRUE)
+# Plus standard columns: stratum, sample_id, male, female, unsexed counts
+
+fish_with_ages <- assign_ages_from_cohort(
+  fish_data = raw_fish_data,
+  cohort_model = cohort_model,
+  method = "mode",      # "mode", "expected", or "random"
+  verbose = TRUE
+)
+
+# Check assigned ages
+table(fish_with_ages$age)
+```
+
+**Assignment Methods**:
+
+- `"mode"`: Most probable age (deterministic, recommended for standard analyses)
+- `"expected"`: Expected age value (weighted mean of probability distribution)
+- `"random"`: Stochastic sampling from probability distribution (for uncertainty propagation)
+
+**Additional Options**:
+
+- `seed`: Set random seed for reproducible sampling (when method = "random")
+- `keep_probabilities`: Retain all age probabilities in output (default FALSE)
+
+#### Step 3: Calculate Scaled Age Compositions
+
+```r
+# Define length-weight parameters
+lw_male <- c(a = 0.01, b = 3.0)
+lw_female <- c(a = 0.011, b = 2.95)
+lw_unsexed <- c(a = 0.0105, b = 2.98)
+
+# Calculate scaled age compositions with bootstrap uncertainty
+age_comps <- calculate_age_compositions_from_cohort(
+  fish_data = fish_with_ages,
+  strata_data = strata_data,
+  age_range = c(1, 10),
+  lw_params_male = lw_male,
+  lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps = 100,
+  plus_group_age = TRUE,
+  verbose = TRUE
+)
+
+# View results
+print(age_comps$pooled_age_composition)
+print(age_comps$pooled_age_cv)
 ```
 
 **Key Features**:
 
-- **Year Class Calculation**: Cohorts defined as YC = (Year - Age) - age_offset (default age_offset = 1)
-- **Flexible Offset**: Configurable age_offset parameter to match different fisheries conventions
-- **Dual Predictions**: Estimate cohort probabilities OR back-calculate age probabilities
-- **Sex-Specific Models**: Optional sex-specific smooths for length and year effects
-- **Robust Fitting**: Uses mgcv::ocat with cumulative logit link for stable ordinal modeling
+- Same scaling methodology as `calculate_length_compositions()`
+- Supports weight-based (commercial) and density-based (survey) scaling
+- Hierarchical bootstrap for uncertainty estimation at sample and fish levels
+- Returns CVs and 95% confidence intervals
+- Compatible with existing plotting and analysis functions
 
-**Algorithm**: The model fits cohort ~ s(length) + s(year) with optional sex interactions, where cohorts are calculated using the configurable year class equation. This allows tracking of specific birth cohorts through time and estimation of cohort-specific length distributions.
+**Output Structure**:
+
+- `age_composition`: 3D array (age x sex x stratum)
+- `age_proportions`: Proportions by age, sex, stratum
+- `pooled_age_composition`: Pooled across all strata
+- `age_cvs`: Coefficients of variation from bootstrap
+- `age_ci_lower`, `age_ci_upper`: Bootstrap confidence intervals
+
+#### Complete Example
+
+```r
+# Complete workflow from start to finish
+library(scala)
+
+# Step 1: Fit cohort model on aged subsample
+cohort_model <- fit_cohort_alk(
+  alk_data = aged_fish_subsample,
+  by_sex = TRUE,
+  age_offset = 1
+)
+
+# Step 2: Assign ages to full dataset
+fish_with_ages <- assign_ages_from_cohort(
+  fish_data = full_fish_data,
+  cohort_model = cohort_model,
+  method = "mode"
+)
+
+# Step 3: Calculate scaled age compositions
+age_results <- calculate_age_compositions_from_cohort(
+  fish_data = fish_with_ages,
+  strata_data = strata_info,
+  age_range = c(1, 10),
+  lw_params_male = lw_male,
+  lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps = 100,
+  plus_group_age = TRUE
+)
+
+# Analyze results
+summary_stats <- data.frame(
+  Age = age_results$ages,
+  Composition = age_results$pooled_age_composition[, "total"],
+  Proportion = age_results$pooled_age_proportions[, "total"],
+  CV = age_results$pooled_age_cv[, "total"]
+)
+print(summary_stats)
+```
+
+#### When to Use Cohort Modelling
+
+**Advantages**:
+
+- Leverages temporal patterns for improved age predictions
+- Better extrapolation beyond observed length ranges
+- Natural handling of multi-year datasets
+- Flexible sex-specific growth modelling
+- Captures cohort-specific characteristics
+
+**Best suited for**:
+
+- Multi-year sampling programs
+- Data with clear cohort progression signals
+- Need for temporal smoothing
+- Sparse age sampling in some years/lengths
+
+**Comparison with Traditional ALK**:
+
+- **Traditional ALK**: Single-year focus, simple age-length relationship
+- **Cohort Model**: Multi-year temporal tracking, cohort-based predictions
+
+For complete details, see `COHORT_AGE_WORKFLOW.md` and run the demo script:
+
+```r
+source("Test/demo_cohort_age_compositions.R")
+```
 
 ## Length Measurement Bias Correction
 
@@ -400,6 +609,7 @@ print(bias_check$preference_ratio)  # Ratio of preferred vs non-preferred length
 ```
 
 The function returns:
+
 - **preference_ratio**: Ratio of mean frequency at preferred vs non-preferred lengths
 - **bias_severity**: Classification ("None", "Mild", "Moderate", "Strong")
 - **chi_square_test**: Statistical test for uniformity
@@ -483,7 +693,7 @@ User-defined length-age pairs are applied first for extreme lengths:
 For missing lengths that fall **between** observed data points:
 
 - **Method**: Distance-weighted linear interpolation
-- **Calculation**: `interpolated_prop = weight_lower × lower_prop + weight_upper × upper_prop`
+- **Calculation**: `interpolated_prop = weight_lower x lower_prop + weight_upper x upper_prop`
 - **Weights**: Based on distance from bracketing lengths
 - **Assumption**: Age composition changes gradually between observed lengths
 
@@ -512,9 +722,9 @@ For missing lengths **outside** the observed data range:
 
 The algorithms are applied in this order for each missing length:
 
-1. Check for user-specified tail ages → if found, use exact specification
-2. If not found and length is between observed data → use linear interpolation (if enabled)
-3. If not found and length is beyond observed range → use constant extrapolation (if enabled)
+1. Check for user-specified tail ages -> if found, use exact specification
+2. If not found and length is between observed data -> use linear interpolation (if enabled)
+3. If not found and length is beyond observed range -> use constant extrapolation (if enabled)
 4. If disabled, the length remains unfilled (user must handle manually)
 
 This hierarchical approach ensures expert knowledge takes precedence while providing automatic methods for routine data gaps.
@@ -642,21 +852,21 @@ A data frame with the following required columns:
 - **`female`** (numeric): Number of female fish at this length in this sample
 - **`unsexed`** (numeric): Number of unsexed fish at this length in this sample
 - **`total`** (numeric, optional): Total fish at this length (auto-calculated if missing)
-- **`sample_area_km2`** (numeric): Area sampled in this sample in km²
-- **`catch_density_kg_km2`** (numeric): Catch density observed in this sample in kg/km²
+- **`sample_area_km2`** (numeric): Area sampled in this sample in km^2
+- **`catch_density_kg_km2`** (numeric): Catch density observed in this sample in kg/km^2
 
 #### Strata Data (`strata_data`)
 
 A data frame with stratum-level information:
 
 - **`stratum`** (character/factor): Stratum identifier that matches fish_data
-- **`stratum_area_km2`** (numeric): Total area of the stratum in km²
+- **`stratum_area_km2`** (numeric): Total area of the stratum in km^2
 
 ## Usage
 
 The function automatically detects whether you're using weight-based or density-based data based on the column names provided.
 
-**Length-Weight Parameters Required:** All analyses require species and sex-specific length-weight parameters using the allometric relationship: Weight (g) = a × Length(cm)^b
+**Length-Weight Parameters Required:** All analyses require species and sex-specific length-weight parameters using the allometric relationship: Weight (g) = a x Length(cm)^b
 
 ### Commercial Fisheries Example (Weight-based Scaling)
 
@@ -888,7 +1098,7 @@ pooled_plot <- plot(result,
                     by_stratum = FALSE, 
                     show_CIs = TRUE)
 
-# 2. Faceted by-stratum plot showing all sex×stratum combinations
+# 2. Faceted by-stratum plot showing all sexxstratum combinations
 faceted_plot <- plot(result, 
                      by_stratum = TRUE, 
                      show_CIs = TRUE)
@@ -1227,8 +1437,8 @@ plot_sample_size_distribution(
 The plot uses colour coding to show different sample categories:
 
 - **Non-representative Small** (red): Small samples with poor representativeness (< 20% of total catch)
-- **Representative Small** (amber): Small samples that are highly representative (≥ 20% of total catch)
-- **Adequate** (green): Samples meeting minimum fish count thresholds (≥ 15 fish by default)
+- **Representative Small** (amber): Small samples that are highly representative (>= 20% of total catch)
+- **Adequate** (green): Samples meeting minimum fish count thresholds (>= 15 fish by default)
 
 When sample weight data is not available, all small samples are grouped as "Small Samples" since representativeness cannot be assessed.
 
@@ -1340,7 +1550,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 
 ### Length-Weight Parameter Notes
 
-- Parameters follow the allometric relationship: **Weight (g) = a × Length(cm)^b**
+- Parameters follow the allometric relationship: **Weight (g) = a x Length(cm)^b**
 - Both `a` and `b` must be positive values
 - Parameters must be provided as named vectors with elements 'a' and 'b'
 - Different parameters for each sex category allow for sexual dimorphism in growth
@@ -1452,7 +1662,7 @@ For example, if we had:
 - Sample scaling factor: 85/8.5 = 10
 - Shallow stratum total: 15,000 kg, samples represent 300 kg
 - Stratum scaling factor: 15,000/300 = 50
-- **Final scaling**: 15 fish × 10 × 50 = 7,500 fish at 22cm in shallow stratum
+- **Final scaling**: 15 fish x 10 x 50 = 7,500 fish at 22cm in shallow stratum
 
 ### Uncertainty Interpretation
 
@@ -1506,7 +1716,7 @@ if (length(high_cv_lengths) > 0) {
   cat("Lengths with high uncertainty (CV > 30%):", high_cv_lengths, "\n")
   cat("Consider additional sampling for these size classes.\n")
 } else {
-  cat("All length classes have adequate precision (CV ≤ 30%).\n")
+  cat("All length classes have adequate precision (CV <= 30%).\n")
 }
 
 # Summary statistics
@@ -1581,7 +1791,7 @@ cat("Strata with < 8 samples:", nrow(sample_eval$small_strata), "\n")
 
 # Review representativeness analysis (if weight data available)
 if (nrow(sample_eval$representative_small_samples) > 0) {
-  cat("\nHighly representative small samples (≥20% of catch - RETAIN):\n")
+  cat("\nHighly representative small samples (>=20% of catch - RETAIN):\n")
   print(sample_eval$representative_small_samples[c("sample_id", "total", "sample_proportion")])
 }
 
@@ -1676,7 +1886,7 @@ text(15, par("usr")[4] * 0.9, "Min threshold", pos = 4, col = "red")
 
 When sample weight and total catch weight data are available, the function evaluates whether small samples represent a significant proportion of the total catch:
 
-- **Highly Representative** (≥20% of total catch): Small samples that are retained despite low fish counts because they provide adequate coverage of the catch
+- **Highly Representative** (>=20% of total catch): Small samples that are retained despite low fish counts because they provide adequate coverage of the catch
 - **Poorly Representative** (<20% of total catch): Small samples that may be excluded because they provide limited information relative to the total catch
 - **Smart Filtering**: The `filter_small_samples()` function can automatically preserve representative samples while excluding problematic ones
 
@@ -1692,10 +1902,14 @@ When sample weight and total catch weight data are available, the function evalu
 
 - **`alk_data`**: Data frame (or named list of sex-specific frames) with columns: `age`, `length`, and optionally `sex` (one row per aged fish)
 - **`by_sex`**: Logical, whether to fit sex-specific smooths (default: TRUE)
-- **`k`**: Basis dimension for smooth terms; -1 uses mgcv’s automatic selection (default: -1)
+- **`k`**: Basis dimension for length smooth terms; when -1 (default), chosen adaptively as `min(10, max(3, floor(n_unique_lengths / 3)))`
+- **`select`**: Whether to add an extra penalty allowing smooth terms to be penalized to zero (default: TRUE)
+- **`gamma`**: Multiplier for effective degrees of freedom; values > 1 produce smoother models (default: 1.4)
 - **`method`**: Smoothing parameter estimation method for mgcv (default: "REML")
 - **`weights`**: Optional observation weights (default: NULL)
 - **`verbose`**: Logical, print model details (default: TRUE)
+
+**Note**: `additional_terms` can also be passed as a character vector of extra GAM formula terms (e.g., `"te(lat, long)"`). When `by_sex = TRUE`, terms without a `by =` specification are automatically fitted with `by = sex` interactions.
 
 Returns a list with:
 
@@ -1703,6 +1917,7 @@ Returns a list with:
 - `predict_function(lengths, sex)`: function returning a matrix of per-age probabilities
 - `summary`: key model metrics
 - `age_levels`, `sex_levels`, `by_sex`
+- `additional_terms`: the terms passed to the model
 - **Recommended fish per sample**: 20+ fish for critical stock assessment applications
 - **Recommended samples per stratum**: 10+ samples for robust uncertainty estimation
 
@@ -1940,7 +2155,7 @@ The package uses a **year-month (YYYY-MM)** versioning scheme:
 
 ## References
 
-Coggins, L.G.; Gwinn, D.C.; Allen, M.S. (2013). Evaluation of Age–Length Key Sample Sizes Required to Estimate Fish Total Mortality and Growth. *Transactions of the American Fisheries Society*, 142(3), 832–840. https://doi.org/10.1080/00028487.2013.768550
+Coggins, L.G.; Gwinn, D.C.; Allen, M.S. (2013). Evaluation of Age-Length Key Sample Sizes Required to Estimate Fish Total Mortality and Growth. *Transactions of the American Fisheries Society*, 142(3), 832-840. https://doi.org/10.1080/00028487.2013.768550
 
 ## Citation
 
