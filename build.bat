@@ -3,6 +3,11 @@ rem =====================================
 rem Build and Check scala R Package (Windows)
 rem =====================================
 
+call update-version.bat
+
+rem Remove previous check directory if it exists
+if exist scala.Rcheck rmdir /s /q scala.Rcheck
+
 rem Check if R is in PATH
 where R >nul 2>nul
 if errorlevel 1 (

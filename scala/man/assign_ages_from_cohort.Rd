@@ -11,7 +11,8 @@ assign_ages_from_cohort(
   predict_missing = FALSE,
   seed = NULL,
   keep_probabilities = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  ...
 )
 }
 \arguments{
@@ -39,6 +40,11 @@ be assigned NA.}
 \item{keep_probabilities}{Logical, whether to keep all age probabilities in output (default FALSE)}
 
 \item{verbose}{Logical, whether to print progress messages (default TRUE)}
+
+\item{...}{Additional named arguments passed through to the cohort model's \code{predict_age} function.
+These are required when the model was fitted with \code{additional_terms} (e.g., spatial or temporal covariates).
+The values should be vectors of the same length as \code{nrow(fish_data)},
+or alternatively the corresponding columns can be included directly in \code{fish_data}.}
 }
 \value{
 Data frame with original columns plus:
@@ -67,6 +73,10 @@ Use this for propagating uncertainty through subsequent analyses.
 
 The function handles sex-specific models automatically. If the cohort model was fitted
 with \code{by_sex = TRUE}, sex information must be present in fish_data.
+
+If the model was fitted with \code{additional_terms} (e.g., \code{"te(lat, long)"}),
+the corresponding variables must be supplied either as columns in \code{fish_data}
+or as named arguments via \code{...}.
 }
 \examples{
 \dontrun{
