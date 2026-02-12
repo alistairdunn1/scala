@@ -206,6 +206,81 @@ print.multinomial_n <- function(x, ...) {
   cat("  Degrees of freedom:", x$fit_summary$df[2], "\n")
 }
 
+# Global variables for R CMD check
+utils::globalVariables(c("proportion", "cv", "predicted_cv"))
+
+#' Plot method for multinomial_n objects
+#'
+#' Creates a ggplot showing observed CVs versus proportions with the fitted
+#' multinomial curve overlaid. Points are the observed data used in the fit
+#' and the curve shows the theoretical relationship CV = sqrt((1-P) / (n*P))
+#' for the estimated effective sample size n.
+#'
+#' @param x A multinomial_n object from calculate_multinomial_n()
+#' @param ... Additional arguments (not used)
+#' @return A ggplot object
+#' @importFrom ggplot2 ggplot aes geom_point geom_line labs theme_minimal annotate
+#' @export
+plot.multinomial_n <- function(x, ...) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting. Please install it with: install.packages('ggplot2')")
+  }
+
+  # Build data frame of observed values
+  obs_df <- data.frame(
+    proportion = x$proportions,
+    cv = x$cvs
+  )
+
+  # Build fitted curve over the proportion range
+  p_seq <- seq(min(x$proportions) * 0.8, max(x$proportions) * 1.2, length.out = 200)
+  p_seq <- p_seq[p_seq > 0 & p_seq < 1]
+  fit_df <- data.frame(
+    proportion = p_seq,
+    predicted_cv = sqrt((1 - p_seq) / (x$effective_n * p_seq))
+  )
+
+  # Build title
+  title_parts <- paste0("Multinomial Effective Sample Size: n = ", x$effective_n)
+  if (!is.null(x$sex)) {
+    title_parts <- paste0(title_parts, " (", x$sex)
+    if (!is.null(x$stratum)) {
+      title_parts <- paste0(title_parts, ", ", x$stratum)
+    }
+    title_parts <- paste0(title_parts, ")")
+  }
+
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_point(
+      data = obs_df,
+      ggplot2::aes(x = proportion, y = cv),
+      colour = "steelblue", size = 2.5, alpha = 0.8
+    ) +
+    ggplot2::geom_line(
+      data = fit_df,
+      ggplot2::aes(x = proportion, y = predicted_cv),
+      colour = "red", linewidth = 0.8
+    ) +
+    ggplot2::labs(
+      title = title_parts,
+      x = "Proportion",
+      y = "Coefficient of Variation (CV)"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::annotate(
+      "text",
+      x = max(obs_df$proportion) * 0.95,
+      y = max(obs_df$cv) * 0.95,
+      label = paste0(
+        "n = ", x$effective_n, "\nbins = ", x$n_bins,
+        "\nRSE = ", sprintf("%.4f", x$fit_summary$sigma)
+      ),
+      hjust = 1, vjust = 1, size = 3.5, colour = "grey30"
+    )
+
+  return(p)
+}
+
 #' Internal function to calculate all combinations
 #' @keywords internal
 calculate_all_combinations_internal <- function(x, sex_categories, include_pooled,
