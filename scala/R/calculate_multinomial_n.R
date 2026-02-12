@@ -1,7 +1,10 @@
 #' @title Calculate Multinomial Effective Sample Size
 #' @description Calculates the multinomial effective sample size from length or age composition proportions and
 #'   their coefficients of variation. Can analyse a single combination or all combinations of strata and sex categories.
-#' @param x A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()
+#' @param x A length_composition object from calculate_length_compositions(), an age_composition object
+#'   from calculate_age_compositions(), or a numeric vector of proportions (requires cvs parameter)
+#' @param cvs Numeric vector of coefficients of variation, required when x is a numeric vector of proportions.
+#'   Must be the same length as x. Ignored when x is a composition object.
 #' @param stratum Character, name of stratum to analyse. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE
 #' @param sex Character, sex category to analyse: "male", "female", "unsexed", or "total" (default). Ignored when all = TRUE
 #' @param all Logical, whether to calculate for all combinations of strata and sex categories (default FALSE)
@@ -85,6 +88,12 @@
 #' ac_result <- calculate_age_compositions(lc_result, age_key)
 #' eff_n_age <- calculate_multinomial_n(ac_result, sex = "total")
 #' all_n_age <- calculate_multinomial_n(ac_result, all_combinations = TRUE)
+#'
+#' # From raw vectors of proportions and CVs
+#' props <- c(0.05, 0.15, 0.30, 0.25, 0.15, 0.07, 0.03)
+#' cv_vals <- c(0.8, 0.4, 0.2, 0.25, 0.45, 0.7, 1.1)
+#' eff_n_raw <- calculate_multinomial_n(props, cvs = cv_vals)
+#' print(eff_n_raw$effective_n)
 #' }
 #'
 #' @references
@@ -98,6 +107,7 @@
 #'
 #' @export
 calculate_multinomial_n <- function(x,
+                                    cvs = NULL,
                                     stratum = NULL,
                                     sex = "total",
                                     all = FALSE,
@@ -109,9 +119,35 @@ calculate_multinomial_n <- function(x,
                                     max_cv = 5.0,
                                     trace = FALSE,
                                     quiet = TRUE) {
+  # Handle raw numeric vector input
+  if (is.numeric(x)) {
+    if (is.null(cvs) || !is.numeric(cvs)) {
+      stop("When x is a numeric vector of proportions, cvs must also be provided as a numeric vector")
+    }
+    if (length(x) != length(cvs)) {
+      stop("proportions and cvs must have the same length")
+    }
+    if (length(x) < 3) {
+      stop("Need at least 3 data points for analysis")
+    }
+    return(fit_multinomial_model_internal(
+      proportions = x,
+      cvs = cvs,
+      bins = seq_along(x),
+      remove_outliers = remove_outliers,
+      min_proportion = min_proportion,
+      min_cv = min_cv,
+      max_cv = max_cv,
+      trace = trace,
+      analysis_type = "raw_vectors",
+      sex = NULL,
+      stratum = NULL
+    ))
+  }
+
   # Validate input
   if (!inherits(x, c("length_composition", "age_composition"))) {
-    stop("Input must be a length_composition or age_composition object")
+    stop("Input must be a length_composition or age_composition object, or a numeric vector of proportions")
   }
 
   if (x$n_bootstraps == 0) {
@@ -150,7 +186,9 @@ print.multinomial_n <- function(x, ...) {
   cat("=========================================\n\n")
 
   cat("Analysis type:", x$analysis_type, "\n")
-  cat("Sex category:", x$sex, "\n")
+  if (!is.null(x$sex)) {
+    cat("Sex category:", x$sex, "\n")
+  }
   if (!is.null(x$stratum)) {
     cat("Stratum:", x$stratum, "\n")
   }
@@ -241,67 +279,13 @@ calculate_all_combinations_internal <- function(x, sex_categories, include_poole
   return(final_results)
 }
 
-#' Internal function to calculate single combination
+#' Internal function to fit the multinomial model from proportions and CVs
 #' @keywords internal
-calculate_single_combination_internal <- function(x, stratum, sex, remove_outliers,
-                                                  min_proportion, min_cv, max_cv, trace) {
-  # Extract proportions and CVs based on stratum specification
-  if (is.null(stratum)) {
-    # Use pooled data across all strata
-    if (inherits(x, "length_composition")) {
-      proportions <- x$pooled_proportions[, sex]
-      # Check which CV field is available and use it
-      if (is.matrix(x$pooled_proportions_cv)) {
-        cvs <- x$pooled_proportions_cv[, sex]
-      } else if (is.matrix(x$pooled_lc_cv)) {
-        # Calculate CVs for proportions from length composition CVs
-        # CV_prop ≈ CV_lc when total is stable
-        cvs <- x$pooled_lc_cv[, sex]
-      } else {
-        stop("No valid CV data found. Bootstrap results are required.")
-      }
-      bins <- x$lengths
-      analysis_type <- "length_composition"
-    } else { # age_composition
-      proportions <- x$pooled_age_proportions[, sex]
-      if (is.matrix(x$pooled_age_proportions_cv)) {
-        cvs <- x$pooled_age_proportions_cv[, sex]
-      } else {
-        stop("No valid age proportion CV data found. Bootstrap results are required.")
-      }
-      bins <- x$ages
-      analysis_type <- "age_composition"
-    }
-  } else {
-    # Use specific stratum
-    if (!stratum %in% x$strata_names) {
-      stop("stratum '", stratum, "' not found. Available strata: ", paste(x$strata_names, collapse = ", "))
-    }
-    if (inherits(x, "length_composition")) {
-      proportions <- x$proportions[, sex, stratum]
-      # Check which CV field is available and use it
-      if (is.array(x$proportions_cvs) && length(dim(x$proportions_cvs)) == 3) {
-        cvs <- x$proportions_cvs[, sex, stratum]
-      } else if (is.array(x$lc_cvs) && length(dim(x$lc_cvs)) == 3) {
-        # Use length composition CVs as approximation
-        cvs <- x$lc_cvs[, sex, stratum]
-      } else {
-        stop("No valid CV data found for stratum-specific analysis.")
-      }
-      bins <- x$lengths
-      analysis_type <- "length_composition"
-    } else { # age_composition
-      proportions <- x$age_proportions[, sex, stratum]
-      if (is.array(x$age_proportions_cvs) && length(dim(x$age_proportions_cvs)) == 3) {
-        cvs <- x$age_proportions_cvs[, sex, stratum]
-      } else {
-        stop("No valid age proportion CV data found for stratum-specific analysis.")
-      }
-      bins <- x$ages
-      analysis_type <- "age_composition"
-    }
-  }
-
+fit_multinomial_model_internal <- function(proportions, cvs, bins,
+                                           remove_outliers, min_proportion,
+                                           min_cv, max_cv, trace,
+                                           analysis_type = "raw_vectors",
+                                           sex = NULL, stratum = NULL) {
   # Create data frame and apply filters
   data_df <- data.frame(
     bin = bins,
@@ -314,10 +298,9 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
     (!is.na(data_df$cv) & data_df$cv >= min_cv & data_df$cv <= max_cv)
 
   if (sum(valid_idx) < 3) {
-    bin_type <- if (inherits(x, "length_composition")) "length" else "age"
     stop(
-      "Insufficient valid data points for analysis. Need at least 3 ", bin_type, " bins with proportion > ",
-      min_proportion, " and 0 < CV <= ", max_cv
+      "Insufficient valid data points for analysis. Need at least 3 bins with proportion > ",
+      min_proportion, " and ", min_cv, " <= CV <= ", max_cv
     )
   }
 
@@ -397,6 +380,83 @@ calculate_single_combination_internal <- function(x, stratum, sex, remove_outlie
       )
     }
   )
+}
+
+#' Internal function to calculate single combination
+#' @keywords internal
+calculate_single_combination_internal <- function(x, stratum, sex, remove_outliers,
+                                                  min_proportion, min_cv, max_cv, trace) {
+  # Extract proportions and CVs based on stratum specification
+  if (is.null(stratum)) {
+    # Use pooled data across all strata
+    if (inherits(x, "length_composition")) {
+      proportions <- x$pooled_proportions[, sex]
+      # Check which CV field is available and use it
+      if (is.matrix(x$pooled_proportions_cv)) {
+        cvs <- x$pooled_proportions_cv[, sex]
+      } else if (is.matrix(x$pooled_lc_cv)) {
+        # Calculate CVs for proportions from length composition CVs
+        # CV_prop ≈ CV_lc when total is stable
+        cvs <- x$pooled_lc_cv[, sex]
+      } else {
+        stop("No valid CV data found. Bootstrap results are required.")
+      }
+      bins <- x$lengths
+      analysis_type <- "length_composition"
+    } else { # age_composition
+      proportions <- x$pooled_age_proportions[, sex]
+      if (is.matrix(x$pooled_age_proportions_cv)) {
+        cvs <- x$pooled_age_proportions_cv[, sex]
+      } else {
+        stop("No valid age proportion CV data found. Bootstrap results are required.")
+      }
+      bins <- x$ages
+      analysis_type <- "age_composition"
+    }
+  } else {
+    # Use specific stratum
+    if (!stratum %in% x$strata_names) {
+      stop("stratum '", stratum, "' not found. Available strata: ", paste(x$strata_names, collapse = ", "))
+    }
+    if (inherits(x, "length_composition")) {
+      proportions <- x$proportions[, sex, stratum]
+      # Check which CV field is available and use it
+      if (is.array(x$proportions_cvs) && length(dim(x$proportions_cvs)) == 3) {
+        cvs <- x$proportions_cvs[, sex, stratum]
+      } else if (is.array(x$lc_cvs) && length(dim(x$lc_cvs)) == 3) {
+        # Use length composition CVs as approximation
+        cvs <- x$lc_cvs[, sex, stratum]
+      } else {
+        stop("No valid CV data found for stratum-specific analysis.")
+      }
+      bins <- x$lengths
+      analysis_type <- "length_composition"
+    } else { # age_composition
+      proportions <- x$age_proportions[, sex, stratum]
+      if (is.array(x$age_proportions_cvs) && length(dim(x$age_proportions_cvs)) == 3) {
+        cvs <- x$age_proportions_cvs[, sex, stratum]
+      } else {
+        stop("No valid age proportion CV data found for stratum-specific analysis.")
+      }
+      bins <- x$ages
+      analysis_type <- "age_composition"
+    }
+  }
+
+  # Delegate to shared fitting helper
+  return(fit_multinomial_model_internal(
+    proportions = proportions,
+    cvs = cvs,
+    bins = bins,
+    remove_outliers = remove_outliers,
+    min_proportion = min_proportion,
+    min_cv = min_cv,
+    max_cv = max_cv,
+    trace = trace,
+    analysis_type = analysis_type,
+    sex = sex,
+    stratum = stratum
+  ))
 }
 
 #' Print method for multinomial_n_summary objects

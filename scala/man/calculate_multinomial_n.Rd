@@ -6,6 +6,7 @@
 \usage{
 calculate_multinomial_n(
   x,
+  cvs = NULL,
   stratum = NULL,
   sex = "total",
   all = FALSE,
@@ -20,7 +21,11 @@ calculate_multinomial_n(
 )
 }
 \arguments{
-\item{x}{A length_composition object from calculate_length_compositions() or an age_composition object from calculate_age_compositions()}
+\item{x}{A length_composition object from calculate_length_compositions(), an age_composition object
+from calculate_age_compositions(), or a numeric vector of proportions (requires cvs parameter)}
+
+\item{cvs}{Numeric vector of coefficients of variation, required when x is a numeric vector of proportions.
+Must be the same length as x. Ignored when x is a composition object.}
 
 \item{stratum}{Character, name of stratum to analyse. If NULL (default), uses pooled data across all strata. Ignored when all = TRUE}
 
@@ -121,6 +126,12 @@ age_key <- generate_age_length_key(
 ac_result <- calculate_age_compositions(lc_result, age_key)
 eff_n_age <- calculate_multinomial_n(ac_result, sex = "total")
 all_n_age <- calculate_multinomial_n(ac_result, all_combinations = TRUE)
+
+# From raw vectors of proportions and CVs
+props <- c(0.05, 0.15, 0.30, 0.25, 0.15, 0.07, 0.03)
+cv_vals <- c(0.8, 0.4, 0.2, 0.25, 0.45, 0.7, 1.1)
+eff_n_raw <- calculate_multinomial_n(props, cvs = cv_vals)
+print(eff_n_raw$effective_n)
 }
 
 }
