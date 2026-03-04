@@ -4,7 +4,7 @@ citEntry(
   entry = "Manual",
   title = "scala: Scaled catch at length and age composition analyses",
   author = person("Alistair", "Dunn", email = "alistair.dunn@OceanEnvironmental.co.nz", role = c("aut", "cre")),
-  year = "2025",
-  note = "R package version 0.1",
+  year = "2026",
+  note = "R package version 2026-02",
   url = "https://github.com/alistairdunn1/scala"
 )
