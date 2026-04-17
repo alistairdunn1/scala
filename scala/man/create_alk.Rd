@@ -14,6 +14,7 @@ create_alk(
   length_bin_size = NULL,
   interpolate = TRUE,
   extrapolate = TRUE,
+  bootstraps = 0,
   verbose = TRUE
 )
 }
@@ -38,6 +39,8 @@ If NULL (default), uses raw length values without binning.}
 \item{interpolate}{Logical, whether to allow linear interpolation for missing length bins (default: TRUE)}
 
 \item{extrapolate}{Logical, whether to allow extrapolation for lengths outside the observed range (default: TRUE)}
+
+\item{bootstraps}{Integer, number of bootstrap ALK iterations to generate by resampling otolith rows with replacement (default: 0). When > 0, bootstrap ALKs are stored as \code{attr(*, "alk_bootstraps")} and \code{attr(*, "n_alk_bootstraps")} for use in \code{calculate_age_compositions()}.}
 
 \item{verbose}{Logical, whether to print progress messages}
 }

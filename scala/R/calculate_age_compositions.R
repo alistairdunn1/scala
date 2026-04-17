@@ -328,7 +328,7 @@ calculate_age_compositions <- function(x,
   age_proportions <- main_age_comp
   pooled_age_comp <- apply(main_age_comp, c(1, 2), sum) # Sum across strata
   # Preserve composition column - should contain ages, not summed values
-  pooled_age_comp[, "composition"] <- main_age_comp[, "composition", 1]  # Ages are same across strata
+  pooled_age_comp[, "composition"] <- main_age_comp[, "composition", 1] # Ages are same across strata
 
   # Vectorized proportion calculation for strata
   stratum_totals <- apply(main_age_comp[, "total", , drop = FALSE], 3, sum)
@@ -357,6 +357,18 @@ calculate_age_compositions <- function(x,
       ages, sex_categories, x$strata_names, 1:x$n_bootstraps
     )
 
+    # Extract per-iteration ALK bootstraps if available (from create_alk(bootstraps > 0))
+    alk_bootstraps <- attr(age_length_key, "alk_bootstraps")
+    if (!is.null(alk_bootstraps)) {
+      if (length(alk_bootstraps) != x$n_bootstraps) {
+        stop(
+          "Number of ALK bootstraps (", length(alk_bootstraps),
+          ") must match LF bootstraps (", x$n_bootstraps, ")"
+        )
+      }
+      if (verbose) cat("Using per-iteration bootstrap ALKs to propagate ALK sampling uncertainty...\n")
+    }
+
     # Optimized batch processing of bootstrap iterations
     batch_size <- min(50, x$n_bootstraps) # Process in batches for memory efficiency
 
@@ -372,13 +384,16 @@ calculate_age_compositions <- function(x,
       for (b in batch_indices) {
         # Extract bootstrap and ensure it's 3D (length x sex x stratum)
         boot_lc <- x$lc_bootstraps[, , , b, drop = FALSE]
-        boot_dimnames <- dimnames(boot_lc)[1:3]  # Save dimension names
-        dim(boot_lc) <- dim(boot_lc)[1:3]  # Keep only first 3 dimensions
-        dimnames(boot_lc) <- boot_dimnames  # Restore dimension names
-        
+        boot_dimnames <- dimnames(boot_lc)[1:3] # Save dimension names
+        dim(boot_lc) <- dim(boot_lc)[1:3] # Keep only first 3 dimensions
+        dimnames(boot_lc) <- boot_dimnames # Restore dimension names
+
+        # Use per-iteration ALK if available, otherwise use fixed ALK
+        boot_alk <- if (!is.null(alk_bootstraps)) alk_bootstraps[[b]] else age_length_key
+
         boot_result <- apply_age_length_key(
           length_comp = boot_lc,
-          age_length_key = age_length_key,
+          age_length_key = boot_alk,
           ages = ages,
           lengths = x$lengths,
           plus_group_age = plus_group_age,

@@ -57,6 +57,7 @@
 #' print(attr(complete_alk, "interpolation_info"))
 #' }
 #'
+#' @param bootstraps Integer, number of bootstrap ALK iterations to generate by resampling otolith rows with replacement (default: 0). When > 0, bootstrap ALKs are stored as \code{attr(*, "alk_bootstraps")} and \code{attr(*, "n_alk_bootstraps")} for use in \code{calculate_age_compositions()}.
 #' @importFrom stats aggregate ave
 #' @export
 create_alk <- function(age_data,
@@ -68,6 +69,7 @@ create_alk <- function(age_data,
                        length_bin_size = NULL,
                        interpolate = TRUE,
                        extrapolate = TRUE,
+                       bootstraps = 0,
                        verbose = TRUE) {
   # Validate inputs
   if (!is.data.frame(age_data)) {
@@ -665,6 +667,51 @@ create_alk <- function(age_data,
 
   # Set the S3 class
   class(complete_keys) <- c("age_length_key", "list")
+
+  # Generate bootstrap ALKs by resampling otolith rows with replacement
+  if (bootstraps > 0) {
+    if (verbose) cat("\nGenerating", bootstraps, "bootstrap ALK iterations...\n")
+    alk_bootstraps <- vector("list", bootstraps)
+    for (b in seq_len(bootstraps)) {
+      boot_age_data <- age_data[sample(nrow(age_data), replace = TRUE), ]
+      if (is_sex_specific) {
+        boot_key <- list()
+        for (sex_cat in setdiff(names(complete_keys), "unsexed")) {
+          sex_data <- boot_age_data[!is.na(boot_age_data$sex) & boot_age_data$sex == sex_cat, ]
+          if (nrow(sex_data) == 0) {
+            boot_key[[sex_cat]] <- complete_keys[[sex_cat]]
+            next
+          }
+          counts <- aggregate(rep(1, nrow(sex_data)),
+            by = list(length = sex_data$length, age = sex_data$age), FUN = sum
+          )
+          names(counts)[3] <- "n"
+          counts$proportion <- ave(counts$n, counts$length, FUN = function(x) x / sum(x))
+          counts <- counts[, c("length", "age", "proportion", "n")]
+          boot_key[[sex_cat]] <- interpolate_complete_alk(counts, lengths, ages, tail_ages, interpolate, extrapolate)$key_data
+        }
+        # Rebuild unsexed as combined male + female
+        sexed_keys <- boot_key[setdiff(names(boot_key), "unsexed")]
+        combined_data <- do.call(rbind, sexed_keys)
+        combined_counts <- aggregate(cbind(proportion, n) ~ length + age, data = combined_data, sum)
+        combined_counts$proportion <- ave(combined_counts$proportion, combined_counts$length,
+          FUN = function(x) x / sum(x)
+        )
+        boot_key$unsexed <- interpolate_complete_alk(combined_counts, lengths, ages, tail_ages, interpolate, extrapolate)$key_data
+        alk_bootstraps[[b]] <- boot_key
+      } else {
+        counts <- aggregate(rep(1, nrow(boot_age_data)),
+          by = list(length = boot_age_data$length, age = boot_age_data$age), FUN = sum
+        )
+        names(counts)[3] <- "n"
+        counts$proportion <- ave(counts$n, counts$length, FUN = function(x) x / sum(x))
+        counts <- counts[, c("length", "age", "proportion", "n")]
+        alk_bootstraps[[b]] <- interpolate_complete_alk(counts, lengths, ages, tail_ages, interpolate, extrapolate)$key_data
+      }
+    }
+    attr(complete_keys, "alk_bootstraps") <- alk_bootstraps
+    attr(complete_keys, "n_alk_bootstraps") <- bootstraps
+  }
 
   return(complete_keys)
 }
