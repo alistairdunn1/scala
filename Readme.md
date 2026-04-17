@@ -129,6 +129,7 @@ complete_alk <- create_alk(
   age_length_key = age_key,
   lengths = 20:35,  # All length bins in your data
   ages = 2:8,       # All age bins you want
+  bootstraps = 100, # Bootstrap ALK to propagate otolith sampling uncertainty
   verbose = TRUE
 )
 
@@ -185,9 +186,10 @@ This tool calculates scaled length compositions and age compositions from fish s
 1. **Scaling within samples**: Upweighting sampled fish to represent the entire sample catch (weight-based) or area coverage (density-based)
 2. **Scaling within strata**: Upweighting samples to represent the entire stratum catch or area
 3. **Scaling across strata**: Combining strata to get total population estimates
-4. **Bootstrap resampling**: Providing uncertainty estimates through resampling procedures
-5. **Age composition conversion**: Converting length compositions to age compositions using complete age-length keys with streamlined workflow and clear warnings for incomplete data
-6. **Cohort-based age assignment**: Direct age assignment to individual fish using cohort models for multi-year datasets, followed by scaled age composition calculations
+4. **Bootstrap resampling**: Providing uncertainty estimates through resampling procedures at multiple levels
+5. **ALK bootstrap uncertainty**: Optional resampling of otolith data to account for age-length key sampling uncertainty
+6. **Age composition conversion**: Converting length compositions to age compositions using complete age-length keys with streamlined workflow and clear warnings for incomplete data
+7. **Cohort-based age assignment**: Direct age assignment to individual fish using cohort models for multi-year datasets, followed by scaled age composition calculations
 
 ## Key Concepts
 
@@ -212,8 +214,10 @@ The package supports two scaling approaches:
 - Resamples samples within each stratum (with replacement)
 - Resamples individual fish within each sample
 - Recalculates scaled length compositions for each bootstrap iteration
+- Optional ALK bootstrapping: Resamples otolith data to account for age-length key sampling uncertainty
 - Propagates uncertainty through age-length key application for age compositions
 - Calculates coefficient of variation (CV) from bootstrap distribution
+- Provides realistic confidence intervals that reflect all sources of sampling variability
 
 ## Requirements
 
@@ -227,6 +231,7 @@ The package supports two scaling approaches:
 
 - **Bootstrap iterations**: More iterations provide better uncertainty estimates but increase computation time
 - **Data size**: Large datasets with many strata/samples will require more memory and processing time
+- **ALK bootstrapping**: When creating ALKs with `bootstraps > 0`, the number of ALK bootstrap iterations must match the number of length composition bootstrap iterations
 - **Recommended**: 300+ bootstrap iterations for final analyses, fewer (50-100) for exploratory work
 
 ## Available Functions
@@ -237,7 +242,7 @@ The package provides the following main functions:
 
 - **`calculate_length_compositions()`**: Main function for calculating length compositions with optional bootstrap uncertainty estimation
 - **`calculate_age_compositions()`**: Convert length compositions to age compositions using age-length keys with **smart detection** for complete vs incomplete keys and **warning system** for missing length data
-- **`create_alk()`**: Create complete age-length keys from raw age data with interpolation/extrapolation for missing length-age combinations, supporting both single and sex-specific keys, length binning, and comprehensive sampling requirement analysis
+- **`create_alk()`**: Create complete age-length keys from raw age data with interpolation/extrapolation for missing length-age combinations, supporting both single and sex-specific keys, length binning, bootstrap uncertainty estimation, and comprehensive sampling requirement analysis
 - **`calculate_multinomial_n()`**: Calculate multinomial effective sample size from length or age composition proportions and CVs
 - **`get_summary()`**: Get comprehensive summary statistics including mean weighted CV, fish counts, and haul counts from length composition results
 
@@ -335,8 +340,15 @@ The package provides a workflow for converting length compositions to age compos
 - **Linear interpolation**: Smart interpolation between known length-age combinations in `create_alk()`
 - **Tail extrapolation**: Automatic extrapolation for lengths beyond the key range, with optional user-specified tail ages
 - **Sex-specific support**: Full support for male, female, and unsexed fish categories
-- **Bootstrap uncertainty**: Uncertainty propagation through all age composition calculations
+- **Bootstrap uncertainty**: Uncertainty propagation through all age composition calculations, including optional ALK bootstrapping to account for otolith sampling uncertainty
 - **Comprehensive visualisation**: Plots with uncertainty ribbons and multi-panel layouts
+
+**Bootstrap Uncertainty Propagation**:
+
+- **Optional ALK bootstrapping**: `create_alk()` can generate bootstrap ALK iterations by resampling otolith data
+- **Automatic propagation**: `calculate_age_compositions()` detects and uses bootstrap ALKs when available
+- **Combined uncertainty**: Captures both length composition uncertainty and ALK sampling uncertainty
+- **Simple workflow**: Single `bootstraps` parameter in `create_alk()` enables full uncertainty propagation
 
 **Benefits of the Simplified Approach**:
 
@@ -668,6 +680,7 @@ The `create_alk()` function provides a comprehensive solution for creating compl
 
 - **Raw Data Input**: Takes raw age-length data (one row per aged fish) rather than pre-processed age-length keys
 - **Automatic Key Creation**: Converts raw data to proportional age-length keys with comprehensive interpolation/extrapolation
+- **Bootstrap Uncertainty**: Optional bootstrap resampling of otolith data to propagate ALK sampling uncertainty through age compositions
 - **Length Binning**: Optional binning of length data (e.g., 2cm or 5cm bins) to consolidate sparse data
 - **Interpolation Control**: Optional linear interpolation between observed length bins
 - **Extrapolation Control**: Optional extrapolation beyond the observed length range
@@ -747,6 +760,7 @@ complete_alk <- create_alk(
   age_data = age_data,
   lengths = 20:40,           # All lengths in your length composition data
   ages = 1:8,               # All ages you want to include
+  bootstraps = 100,         # Bootstrap ALK to propagate otolith sampling uncertainty
   verbose = TRUE            # Show progress and interpolation summary
 )
 
@@ -769,6 +783,7 @@ complete_alk <- create_alk(
   length_bin_size = 2,           # Use 2cm length bins
   interpolate = TRUE,            # Allow linear interpolation (default)
   extrapolate = FALSE,           # Disable extrapolation beyond observed range
+  bootstraps = 100,              # Bootstrap ALK iterations (0 = no bootstrapping)
   min_ages_per_length = 5,       # Minimum otoliths per length bin
   optimum_ages_per_length = 15,  # Optimum otoliths per length bin
   verbose = TRUE
@@ -801,6 +816,7 @@ complete_alk <- create_alk(
     min_lengths = data.frame(length = c(13, 14), age = c(1, 1)),  # Young fish
     max_lengths = data.frame(length = c(46, 47), age = c(10, 10)) # Old fish
   ),
+  bootstraps = 100,  # Propagate uncertainty from otolith sampling
   verbose = TRUE
 )
 ```
@@ -814,6 +830,60 @@ The `calculate_age_compositions()` function automatically detects complete age-l
 complete_key <- create_alk(age_data, lengths = 15:35, ages = 1:8)
 age_results <- calculate_age_compositions(lc_results, complete_key, age_range = c(1, 8))
 ```
+
+### Bootstrap Uncertainty Propagation
+
+When both length compositions and ALK have bootstrap estimates, `calculate_age_compositions()` propagates uncertainty from both sources:
+
+```r
+# Step 1: Calculate length compositions with bootstrapping
+lc_results <- calculate_length_compositions(
+  fish_data = test_data$fish_data,
+  strata_data = test_data$strata_data,
+  length_range = c(20, 40),
+  lw_params_male = lw_params$male,
+  lw_params_female = lw_params$female,
+  lw_params_unsexed = lw_params$unsexed,
+  bootstraps = 300  # Bootstrap length compositions
+)
+
+# Step 2: Create ALK with bootstrapping to account for otolith sampling uncertainty
+complete_key <- create_alk(
+  age_data = aged_fish_data,
+  lengths = 20:40,
+  ages = 1:8,
+  bootstraps = 300  # Must match length composition bootstraps
+)
+
+# Step 3: Calculate age compositions with full uncertainty propagation
+age_results <- calculate_age_compositions(
+  x = lc_results,
+  age_length_key = complete_key,  # Automatically uses bootstrap ALKs
+  age_range = c(1, 8)
+)
+
+# The resulting CVs and confidence intervals now reflect:
+# 1. Uncertainty from length composition sampling (sample and fish resampling)
+# 2. Uncertainty from ALK otolith sampling (otolith row resampling)
+# 3. Combined propagation through the age-length transformation
+```
+
+**Important Notes:**
+
+- Number of ALK bootstraps must match the number of length composition bootstraps
+- When ALK bootstraps are present, each length composition bootstrap iteration uses a different ALK bootstrap
+- If `bootstraps = 0` in `create_alk()`, the same ALK is applied to all length composition bootstraps (only length composition uncertainty is captured)
+- Bootstrap ALKs are stored as attributes and automatically detected by `calculate_age_compositions()`
+
+**Uncertainty Components:**
+
+Without ALK bootstrapping:
+- CV reflects only length composition sampling uncertainty
+
+With ALK bootstrapping:
+- CV reflects both length composition AND otolith sampling uncertainty
+- Results in more realistic (typically larger) confidence intervals
+- Recommended for stock assessments requiring robust uncertainty estimates
 
 ## Input Data Format
 
@@ -1226,7 +1296,8 @@ The `plot_alk()` function creates visualisations of age-length keys showing the 
 alk <- create_alk(
   age_data = generate_test_age_data(),
   lengths = 15:35,
-  ages = 1:8
+  ages = 1:8,
+  bootstraps = 100  # Optional: bootstrap for uncertainty estimation
 )
 
 # Heatmap visualisation (default)
@@ -1516,6 +1587,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 - **`length_bin_size`**: Numeric value for binning lengths (e.g., 2 for 2cm bins). If NULL (default), uses raw length values
 - **`interpolate`**: Logical, whether to allow linear interpolation for missing length bins (default: TRUE)
 - **`extrapolate`**: Logical, whether to allow extrapolation for lengths outside the observed range (default: TRUE)
+- **`bootstraps`**: Integer, number of bootstrap ALK iterations to generate by resampling otolith rows with replacement (default: 0). When > 0, bootstrap ALKs are automatically used by `calculate_age_compositions()` to propagate ALK sampling uncertainty
 - **`verbose`**: Logical, whether to print progress messages
 
 ### plot_alk()
@@ -2062,6 +2134,7 @@ complete_age_key <- create_alk(
   age_data = age_sample_data,    # Raw age data (one row per aged fish)
   lengths = 20:40,               # Full length range in composition data
   ages = 1:8,                    # Full age range desired
+  bootstraps = 100,              # Bootstrap ALK for uncertainty propagation
   verbose = TRUE                 # Show interpolation details
 )
 
@@ -2089,6 +2162,7 @@ complete_age_key_tails <- create_alk(
   lengths = 20:40,
   ages = 1:8,
   tail_ages = tail_ages,
+  bootstraps = 100,              # Bootstrap to propagate uncertainty
   verbose = TRUE
 )
 
