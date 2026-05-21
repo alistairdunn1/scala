@@ -4,10 +4,10 @@ An R implementation for calculating scaled length compositions and age compositi
 
 Supports both **commercial fisheries** (weight-based scaling) and **research surveys** (density-based scaling).
 
-**Note: This package is under active development with comprehensive testing. Core functionality is stable and well-tested (341+ passing tests), though new features may be added.**
+**Note: This package is under active development with comprehensive testing. Core functionality is stable and well-tested (449+ passing tests), though new features may be added.**
 
 [![R Package](https://img.shields.io/badge/R-package-blue.svg)](https://www.r-project.org/)
-[![Version](https://img.shields.io/badge/version-2026--03-orange.svg)](https://github.com/alistairdunn1/scala)
+[![Version](https://img.shields.io/badge/version-2026--04-orange.svg)](https://github.com/alistairdunn1/scala)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Table of Contents
@@ -19,6 +19,7 @@ Supports both **commercial fisheries** (weight-based scaling) and **research sur
 - [Requirements](#requirements)
 - [Available Functions](#available-functions)
 - [Cohort-Based Age Composition Workflow](#cohort-based-age-composition-workflow)
+- [Otolith Weight-Based Age Composition Workflow](#otolith-weight-based-age-composition-workflow)
 - [Length Measurement Bias Correction](#length-measurement-bias-correction)
 - [Creating Complete Age-Length Keys](#creating-complete-age-length-keys)
 - [Input Data Format](#input-data-format)
@@ -190,6 +191,7 @@ This tool calculates scaled length compositions and age compositions from fish s
 5. **ALK bootstrap uncertainty**: Optional resampling of otolith data to account for age-length key sampling uncertainty
 6. **Age composition conversion**: Converting length compositions to age compositions using complete age-length keys with streamlined workflow and clear warnings for incomplete data
 7. **Cohort-based age assignment**: Direct age assignment to individual fish using cohort models for multi-year datasets, followed by scaled age composition calculations
+8. **Otolith weight-based age assignment**: Direct age assignment using otolith weight as a predictor, providing an alternative pathway when otolith weights are available as a continuous proxy for age
 
 ## Key Concepts
 
@@ -250,8 +252,11 @@ The package provides the following main functions:
 
 - **`fit_ordinal_alk()`**: Fit an ordinal GAM (cumulative logit) age-at-length model (optionally by sex) with optional additional smooth terms, and return a prediction function for age probabilities by length
 - **`fit_cohort_alk()`**: Fit a cohort-based ordinal GAM model to estimate year classes from length, year, and sex, with optional additional smooth terms and age back-calculation capability for multi-year datasets
+- **`fit_weight_age()`**: Fit an ordinal GAM (cumulative logit) age-at-otolith-weight model (optionally by sex). Returns a prediction function for age probabilities from otolith weight; provides an alternative or complement to length-based age assignment when otolith weights are available
 - **`assign_ages_from_cohort()`**: Assign ages to individual fish observations using predictions from a fitted cohort model (mode, expected, or random assignment). Supports predicting ages for years with length data but no age data via `predict_missing = TRUE`
-- **`calculate_age_compositions_from_cohort()`**: Calculate scaled age compositions from cohort model-assigned ages using the same scaling methodology as length compositions
+- **`assign_ages_from_weight()`**: Assign ages to individual fish observations using predictions from a fitted weight-age model (mode, expected, or random assignment). Handles NA otolith weights gracefully (assigned NA age) and warns when weights fall outside the training range
+- **`calculate_age_compositions_from_cohort()`**: Calculate scaled age compositions from cohort model-assigned ages using the same scaling methodology as length compositions. Accepts an optional `cohort_model` argument to re-assign ages randomly on each bootstrap iteration, propagating model uncertainty alongside sampling uncertainty
+- **`calculate_age_compositions_from_weight()`**: Calculate scaled age compositions from weight-model-assigned ages. Accepts an optional `weight_age_model` argument to re-assign ages randomly on each bootstrap iteration, propagating model uncertainty alongside sampling uncertainty
 - **`compare_alks()`**: Compare age-length keys from empirical (`create_alk`) and model-based (`fit_ordinal_alk`) methods with summary metrics and optional visualisation
 - **`generate_age_length_key()`**: Create sample age-length keys with various growth models
 
@@ -398,6 +403,8 @@ Notes:
 ### Cohort-Based Age Composition Workflow
 
 The package provides a complete workflow for calculating scaled age compositions using cohort-based modelling. This approach is particularly powerful for multi-year datasets where cohort tracking provides temporal coherence in age assignments.
+
+![Cohort-based age composition workflow](cohort_workflow.svg)
 
 #### Overview
 
@@ -605,6 +612,182 @@ For complete details, see `COHORT_AGE_WORKFLOW.md` and run the demo script:
 source("Test/demo_cohort_age_compositions.R")
 ```
 
+## Otolith Weight-Based Age Composition Workflow
+
+The package provides a complete workflow for calculating scaled age compositions using otolith weight as the predictor variable. This approach uses the continuous relationship between otolith weight and fish age, fitting an ordinal GAM model that parallels the cohort-based approach.
+
+![Otolith weight-based age composition workflow](weight_workflow.svg)
+
+### Overview
+
+The otolith weight workflow consists of three steps:
+
+1. **Fit weight-age model** on aged subsample using `fit_weight_age()`
+2. **Assign ages** to all fish using `assign_ages_from_weight()`
+3. **Calculate scaled age compositions** using `calculate_age_compositions_from_weight()`
+
+The workflow is directly analogous to the cohort workflow but uses otolith weight (a continuous proxy for age) rather than length-year cohort signals. It supports both commercial (weight-based) and survey (density-based) scaling, and full two-source bootstrap uncertainty propagation.
+
+### Step 1: Fit Weight-Age Model
+
+```r
+# Your aged subsample needs: age, weight (otolith weight in grams), sex (optional)
+aged_data <- data.frame(
+  age    = rep(1:6, each = 40),
+  weight = c(rnorm(40, 0.10, 0.04), rnorm(40, 0.23, 0.04),
+             rnorm(40, 0.36, 0.05), rnorm(40, 0.49, 0.05),
+             rnorm(40, 0.62, 0.06), rnorm(40, 0.75, 0.06)),
+  sex    = rep(c("male", "female"), 120)
+)
+
+# Fit weight-age model
+wt_model <- fit_weight_age(
+  weight_age_data = aged_data,
+  by_sex = TRUE,   # Fit sex-specific growth patterns
+  verbose = TRUE
+)
+
+# View model summary
+print(wt_model)
+```
+
+**Key Parameters** (mirroring `fit_ordinal_alk()`):
+
+- `by_sex`: Whether to fit sex-specific smooth terms
+- `k`: Basis dimension for weight smooth terms (auto-selected from data when -1)
+- `select`: Extra penalty allowing smooth terms to shrink to zero (default TRUE)
+- `gamma`: Smoothing multiplier; values > 1 produce smoother models (default 1.4)
+- `additional_terms`: Optional extra GAM formula terms (e.g., `"s(depth)"`)
+
+### Step 2: Assign Ages to Fish Data
+
+```r
+# fish_data needs: otolith_weight, sex (if model uses by_sex)
+# Plus standard columns: stratum, sample_id, length, male, female, unsexed, ...
+
+fish_aged <- assign_ages_from_weight(
+  fish_data        = raw_fish_data,
+  weight_age_model = wt_model,
+  method           = "random",   # "random", "mode", or "expected"
+  seed             = 42,
+  verbose          = TRUE
+)
+
+table(fish_aged$age)
+```
+
+**Assignment Methods**:
+
+- `"random"` (default): Stochastic sampling from the age probability distribution — recommended when propagating uncertainty
+- `"mode"`: Most probable age (deterministic)
+- `"expected"`: Expected (mean) age, rounded to nearest integer
+
+Fish with `NA` otolith weights receive `NA` ages. Fish with weights outside the model's training range still receive predictions but trigger a warning.
+
+### Step 3: Calculate Scaled Age Compositions
+
+```r
+lw_male    <- c(a = 0.01, b = 3.0)
+lw_female  <- c(a = 0.011, b = 2.95)
+lw_unsexed <- c(a = 0.0105, b = 2.98)
+
+# Sampling uncertainty only (model already used for age assignment)
+age_comps <- calculate_age_compositions_from_weight(
+  fish_data         = fish_aged,
+  strata_data       = strata_data,
+  age_range         = c(1, 6),
+  lw_params_male    = lw_male,
+  lw_params_female  = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps        = 300,
+  plus_group_age    = TRUE
+)
+
+# Combined sampling + model uncertainty (re-assigns ages on each bootstrap)
+age_comps_full <- calculate_age_compositions_from_weight(
+  fish_data         = fish_aged,
+  strata_data       = strata_data,
+  age_range         = c(1, 6),
+  lw_params_male    = lw_male,
+  lw_params_female  = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps        = 300,
+  weight_age_model  = wt_model,   # Re-assigns ages randomly each iteration
+  plus_group_age    = TRUE
+)
+```
+
+When `weight_age_model` is supplied, each bootstrap iteration:
+1. Resamples fish hierarchically (sampling + fish-level)
+2. Re-assigns ages using `assign_ages_from_weight(..., method = "random")`
+3. Recalculates scaled compositions
+
+This captures **both** sampling uncertainty and weight-age model uncertainty in the bootstrap distribution. Without `weight_age_model`, only sampling uncertainty is captured.
+
+An equivalent `cohort_model` parameter is available in `calculate_age_compositions_from_cohort()` for the same purpose.
+
+### Complete Example
+
+```r
+library(scala)
+
+# Step 1: Fit weight-age model
+wt_model <- fit_weight_age(aged_otolith_data, by_sex = TRUE)
+
+# Step 2: Assign ages (random method for use with bootstrap propagation)
+fish_aged <- assign_ages_from_weight(
+  fish_data        = full_fish_data,
+  weight_age_model = wt_model,
+  method           = "random",
+  seed             = 42
+)
+
+# Step 3: Calculate compositions with full uncertainty propagation
+age_results <- calculate_age_compositions_from_weight(
+  fish_data         = fish_aged,
+  strata_data       = strata_info,
+  age_range         = c(1, 6),
+  lw_params_male    = lw_male,
+  lw_params_female  = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps        = 300,
+  weight_age_model  = wt_model,
+  plus_group_age    = TRUE
+)
+
+# Analyse results
+print(age_results$pooled_age_composition)
+print(age_results$pooled_age_cv)
+
+# Plot (same interface as all other composition results)
+plot(age_results, by_stratum = FALSE, show_CIs = TRUE)
+```
+
+### When to Use the Otolith Weight Approach
+
+**Advantages**:
+
+- Otolith weight is a continuous, smoothly-varying proxy for age — often better-behaved than discrete length-class assignments
+- Single-year datasets are sufficient (no multi-year temporal signal required, unlike cohort models)
+- Simple model structure: weight → age probabilities without needing year/cohort information
+- Uncertainty propagation is straightforward via the `weight_age_model` bootstrap parameter
+
+**Best suited for**:
+
+- Datasets where otolith weights have been routinely measured
+- Single-year or within-year analyses where cohort tracking is not needed
+- Species where otolith weight is a more reliable age proxy than length
+
+**Comparison with cohort approach**:
+
+| Feature | Weight-age (`fit_weight_age`) | Cohort (`fit_cohort_alk`) |
+|---------|-------------------------------|---------------------------|
+| Predictor | Otolith weight | Length + year |
+| Temporal data | Not required | Required (multi-year) |
+| Otolith weights | Required | Not required |
+| Extrapolation | Weight range | Length/year range |
+| Uncertainty param | `weight_age_model` | `cohort_model` |
+
 ## Length Measurement Bias Correction
 
 Fisheries length data often exhibits measurement bias, particularly "digit preference" where measurers round to convenient values (typically multiples of 5). This package provides tools to diagnose and correct such biases.
@@ -675,6 +858,8 @@ adjusted_alk <- adjust_age_length_key_bias(alk, bias_pattern)
 ## Creating Complete Age-Length Keys
 
 The `create_alk()` function provides a comprehensive solution for creating complete age-length keys from raw age data, addressing common problems in fisheries analysis where age-length coverage is incomplete or sparse.
+
+![ALK-based age composition workflow](alk_workflow.svg)
 
 ### Key Features
 
@@ -2215,7 +2400,7 @@ cat("Missing lengths generate explicit warnings\n")
 
 ## Package Information
 
-**Version**: 2026-03 (automatically updated from git commit date)
+**Version**: 2026-04 (automatically updated from git commit date)
 **Author**: Alistair Dunn
 **Maintainer**: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>
 **License**: GPL (>= 3)
@@ -2245,7 +2430,7 @@ citation("scala")
 
 **Suggested citation:**
 
-Dunn, A. (2026). scala: Scaled catch at length and age composition analyses. R package version 2026-03. https://github.com/alistairdunn1/scala
+Dunn, A. (2026). scala: Scaled catch at length and age composition analyses. R package version 2026-04. https://github.com/alistairdunn1/scala
 
 ## Contributing
 

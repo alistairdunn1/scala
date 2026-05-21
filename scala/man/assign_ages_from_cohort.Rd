@@ -7,7 +7,7 @@
 assign_ages_from_cohort(
   fish_data,
   cohort_model,
-  method = c("mode", "expected", "random"),
+  method = c("random", "mode", "expected"),
   predict_missing = FALSE,
   seed = NULL,
   keep_probabilities = FALSE,
@@ -23,9 +23,9 @@ Additional columns (e.g., stratum, sample_id, counts) will be preserved.}
 
 \item{method}{Character, method for age assignment:
 \itemize{
-  \item \code{"mode"}: Assign the most probable age (default)
+  \item \code{"random"}: Randomly sample age based on probabilities (default)
+  \item \code{"mode"}: Assign the most probable age
   \item \code{"expected"}: Assign the expected age (weighted mean of probabilities)
-  \item \code{"random"}: Randomly sample age based on probabilities
 }}
 
 \item{predict_missing}{Logical, whether to predict ages for years not present in the

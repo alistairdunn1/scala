@@ -18,6 +18,10 @@
 #' @param bootstraps Integer, number of bootstrap iterations. Set to 0 for no bootstrapping (default 300)
 #' @param plus_group_age Logical, combine ages >= max age into a plus group (default TRUE)
 #' @param minus_group_age Logical, combine ages <= min age into a minus group (default FALSE)
+#' @param cohort_model Optional fitted cohort model from \code{\link{fit_cohort_alk}}.
+#'   When supplied, ages are re-assigned randomly on each bootstrap iteration using
+#'   \code{\link{assign_ages_from_cohort}} with \code{predict_missing = TRUE}, propagating
+#'   model uncertainty alongside sampling uncertainty. Has no effect when \code{bootstraps = 0}.
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #'
 #' @return List containing:
@@ -107,6 +111,7 @@ calculate_age_compositions_from_cohort <- function(fish_data,
                                                    bootstraps = 300,
                                                    plus_group_age = TRUE,
                                                    minus_group_age = FALSE,
+                                                   cohort_model = NULL,
                                                    verbose = TRUE) {
   # Validate inputs
   if (!is.data.frame(fish_data)) {
@@ -159,6 +164,19 @@ calculate_age_compositions_from_cohort <- function(fish_data,
     )
   }
 
+  if (!is.null(cohort_model)) {
+    if (!inherits(cohort_model, "cohort_alk")) {
+      stop("cohort_model must be a fitted cohort_alk object from fit_cohort_alk()")
+    }
+  }
+
+  # Remove fish with NA age from composition calculations
+  n_na_age <- sum(is.na(fish_data$age))
+  if (n_na_age > 0) {
+    message("Removing ", n_na_age, " fish with NA age from composition calculations.")
+    fish_data <- fish_data[!is.na(fish_data$age), ]
+  }
+
   # Calculate total column if not present
   if (!"total" %in% names(fish_data)) {
     fish_data$total <- fish_data$male + fish_data$female + fish_data$unsexed
@@ -185,37 +203,17 @@ calculate_age_compositions_from_cohort <- function(fish_data,
     ages, strata_names
   )
 
-  # If no bootstrapping requested, return simple result
-  if (bootstraps == 0) {
-    if (verbose) {
-      cat("No bootstrap uncertainty estimation requested.\n")
-    }
-
-    simple_result <- list(
-      age_composition = main_ac,
-      ages = ages,
-      strata_names = strata_names,
-      n_bootstraps = 0,
-      plus_group_age = plus_group_age,
-      minus_group_age = minus_group_age,
-      has_sex_data = TRUE,
-      scaling_type = scaling_type
-    )
-    class(simple_result) <- "age_composition"
-    return(simple_result)
-  }
-
-  # Calculate pooled results
+  # Calculate pooled results (always needed)
   pooled_ac <- apply(main_ac, c(1, 2), sum)
 
-  # Calculate proportions
+  # Calculate proportions (always needed)
   proportions <- main_ac
   pooled_proportions <- pooled_ac
 
   stratum_totals <- apply(main_ac[, "total", , drop = FALSE], 3, sum)
   meas <- c("male", "female", "unsexed", "total")
 
-  for (i in 1:n_strata) {
+  for (i in seq_len(n_strata)) {
     if (stratum_totals[i] > 0) {
       proportions[, meas, i] <- main_ac[, meas, i] / stratum_totals[i]
     }
@@ -228,6 +226,27 @@ calculate_age_compositions_from_cohort <- function(fish_data,
   }
   pooled_proportions[, "composition"] <- ages
 
+  if (bootstraps == 0) {
+    if (verbose) cat("No bootstrap uncertainty estimation requested.\n")
+    result <- list(
+      age_composition = main_ac,
+      age_proportions = proportions,
+      pooled_age_composition = pooled_ac,
+      pooled_age_proportions = pooled_proportions,
+      age_cvs = NA, age_proportions_cvs = NA,
+      pooled_age_cv = NA, pooled_age_proportions_cv = NA,
+      age_ci_lower = NA, age_ci_upper = NA,
+      pooled_age_ci_lower = NA, pooled_age_ci_upper = NA,
+      age_proportions_ci_lower = NA, age_proportions_ci_upper = NA,
+      pooled_age_proportions_ci_lower = NA, pooled_age_proportions_ci_upper = NA,
+      ages = ages, strata_names = strata_names, n_bootstraps = 0,
+      plus_group_age = plus_group_age, minus_group_age = minus_group_age,
+      has_sex_data = TRUE, scaling_type = scaling_type
+    )
+    class(result) <- "age_composition"
+    return(result)
+  }
+
   # Hierarchical bootstrap
   if (bootstraps > 0) {
     if (verbose) {
@@ -237,13 +256,19 @@ calculate_age_compositions_from_cohort <- function(fish_data,
     ac_bootstraps <- array(0, dim = c(n_ages, 5, n_strata, bootstraps))
     dimnames(ac_bootstraps) <- list(
       ages, c("composition", "male", "female", "unsexed", "total"),
-      strata_names, 1:bootstraps
+      strata_names, seq_len(bootstraps)
     )
 
-    for (b in 1:bootstraps) {
+    for (b in seq_len(bootstraps)) {
       if (verbose && b %% 50 == 0) cat("Bootstrap iteration", b, "of", bootstraps, "\n")
 
       boot_data <- resample_fish_data(fish_data)
+      if (!is.null(cohort_model)) {
+        boot_data <- assign_ages_from_cohort(boot_data, cohort_model,
+                                             method = "random", predict_missing = TRUE,
+                                             verbose = FALSE)
+        boot_data <- boot_data[!is.na(boot_data$age), ]
+      }
       boot_ac <- calculate_age_compositions_core(
         boot_data, strata_data, age_range,
         plus_group_age, minus_group_age, scaling_type,
@@ -268,8 +293,8 @@ calculate_age_compositions_from_cohort <- function(fish_data,
     prop_bootstraps <- ac_bootstraps[, meas, , , drop = FALSE]
     stratum_totals_boot <- apply(ac_bootstraps[, "total", , , drop = FALSE], c(3, 4), sum, na.rm = TRUE)
 
-    for (i in 1:n_strata) {
-      for (b in 1:bootstraps) {
+    for (i in seq_len(n_strata)) {
+      for (b in seq_len(bootstraps)) {
         if (is.finite(stratum_totals_boot[i, b]) && stratum_totals_boot[i, b] > 0) {
           prop_bootstraps[, , i, b] <- ac_bootstraps[, meas, i, b] / stratum_totals_boot[i, b]
         } else {
@@ -285,7 +310,7 @@ calculate_age_compositions_from_cohort <- function(fish_data,
     # Pooled proportion bootstrap
     pooled_prop_bootstraps <- pooled_bootstraps
     pooled_totals <- apply(pooled_bootstraps[, "total", , drop = FALSE], 3, sum, na.rm = TRUE)
-    for (b in 1:bootstraps) {
+    for (b in seq_len(bootstraps)) {
       if (is.finite(pooled_totals[b]) && pooled_totals[b] > 0) {
         pooled_prop_bootstraps[, , b] <- pooled_bootstraps[, , b] / pooled_totals[b]
       } else {

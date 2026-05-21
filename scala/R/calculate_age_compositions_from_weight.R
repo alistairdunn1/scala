@@ -1,0 +1,378 @@
+#' @title Calculate Age Compositions from Otolith Weight Model Predictions
+#' @description Calculates scaled age compositions from fish data with weight-model-assigned ages,
+#'   applying the same scaling and bootstrap methodology as length compositions.
+#'   Supports both weight-based scaling (commercial fisheries) and density-based scaling (surveys).
+#'
+#' @param fish_data Data frame with age-assigned fish data. Must contain columns:
+#'   - age, length, stratum, sample_id
+#'   - male, female, unsexed (fish counts by sex)
+#'   - For weight-based: sample_weight_kg, total_catch_weight_kg
+#'   - For density-based: sample_area_km2, catch_density_kg_km2
+#'   Use \code{\link{assign_ages_from_weight}} to add the age column first.
+#' @param strata_data Data frame with stratum-level information:
+#'   - For weight-based: stratum, stratum_total_catch_kg
+#'   - For density-based: stratum, stratum_area_km2
+#' @param age_range Numeric vector of min and max ages to include (e.g., c(1, 10))
+#' @param lw_params_male Named vector with length-weight parameters for males: c(a = 0.01, b = 3.0)
+#' @param lw_params_female Named vector with length-weight parameters for females: c(a = 0.01, b = 3.0)
+#' @param lw_params_unsexed Named vector with length-weight parameters for unsexed fish: c(a = 0.01, b = 3.0)
+#' @param bootstraps Integer, number of bootstrap iterations. Set to 0 for no bootstrapping (default 300)
+#' @param plus_group_age Logical, combine ages >= max age into a plus group (default TRUE)
+#' @param minus_group_age Logical, combine ages <= min age into a minus group (default FALSE)
+#' @param weight_age_model Optional fitted weight-age model from \code{\link{fit_weight_age}}.
+#'   When supplied, ages are re-assigned randomly on each bootstrap iteration using
+#'   \code{\link{assign_ages_from_weight}}, propagating model uncertainty alongside sampling
+#'   uncertainty. Requires \code{fish_data} to contain an \code{otolith_weight} column.
+#'   Has no effect when \code{bootstraps = 0}.
+#' @param verbose Logical, whether to print progress messages (default TRUE)
+#'
+#' @return List of class \code{"age_composition"} containing:
+#'   \itemize{
+#'     \item \code{age_composition}: 3D array (age x sex x stratum) of scaled age compositions
+#'     \item \code{age_proportions}: 3D array (age x sex x stratum) of age proportions
+#'     \item \code{pooled_age_composition}: Matrix (age x sex) of pooled compositions
+#'     \item \code{pooled_age_proportions}: Matrix (age x sex) of pooled proportions
+#'     \item \code{age_cvs}: 3D array of CVs for age compositions
+#'     \item \code{age_proportions_cvs}: 3D array of CVs for age proportions
+#'     \item \code{pooled_age_cv}: Matrix of pooled CVs
+#'     \item \code{pooled_age_proportions_cv}: Matrix of pooled proportion CVs
+#'     \item \code{age_ci_lower}: 3D array of 2.5th percentile values
+#'     \item \code{age_ci_upper}: 3D array of 97.5th percentile values
+#'     \item \code{pooled_age_ci_lower}: Matrix of 2.5th percentile pooled values
+#'     \item \code{pooled_age_ci_upper}: Matrix of 97.5th percentile pooled values
+#'     \item \code{age_proportions_ci_lower}: 3D array of 2.5th percentile proportion values
+#'     \item \code{age_proportions_ci_upper}: 3D array of 97.5th percentile proportion values
+#'     \item \code{pooled_age_proportions_ci_lower}: Matrix of 2.5th percentile pooled proportions
+#'     \item \code{pooled_age_proportions_ci_upper}: Matrix of 97.5th percentile pooled proportions
+#'     \item \code{ages}: Vector of age bins
+#'     \item \code{strata_names}: Vector of stratum names
+#'     \item \code{n_bootstraps}: Number of bootstrap iterations
+#'     \item \code{plus_group_age}: Plus group setting
+#'     \item \code{minus_group_age}: Minus group setting
+#'     \item \code{has_sex_data}: TRUE (sex-specific analysis)
+#'     \item \code{scaling_type}: Type of scaling applied
+#'   }
+#'
+#' @details
+#' This function applies the same scaling methodology as \code{\link{calculate_length_compositions}}
+#' but operates on age bins instead of length bins. The workflow is:
+#'
+#' 1. Assign ages to fish using \code{\link{assign_ages_from_weight}}
+#' 2. Bin fish by age (instead of length)
+#' 3. Apply weight-based or density-based scaling
+#' 4. Perform hierarchical bootstrap resampling for uncertainty estimation
+#'
+#' **Scaling approaches:**
+#'
+#' *Weight-based (commercial fisheries):*
+#' - Sample scaling: total_catch_weight_kg / observed_sample_weight
+#' - Stratum scaling: stratum_total_catch_kg / sum_of_sample_catches_in_stratum
+#'
+#' *Density-based (surveys):*
+#' - Sample scaling: catch_density_kg_km2 * sample_area_km2 / observed_sample_weight
+#' - Stratum scaling: stratum_area_km2 / sum_of_sample_areas_in_stratum
+#'
+#' **Bootstrap uncertainty:**
+#' Uses hierarchical resampling at two levels:
+#' - Sample-level: Resample samples within strata (captures spatial variation)
+#' - Fish-level: Resample individual fish within samples (captures within-sample variation)
+#'
+#' **Model uncertainty via \code{weight_age_model}:**
+#' When \code{weight_age_model} is supplied, ages are re-drawn from the model on every bootstrap
+#' iteration (after resampling fish), so both sampling uncertainty and model uncertainty contribute
+#' to the bootstrap distribution. When \code{weight_age_model = NULL} (default), bootstrap
+#' resampling captures sampling uncertainty only.
+#'
+#' The output is directly compatible with \code{\link[scala]{plot.age_composition}} and
+#' \code{\link{get_summary}} — no downstream changes are needed.
+#'
+#' @examples
+#' \dontrun{
+#' # Step 1: Fit weight-age model on aged subsample
+#' aged_data <- data.frame(
+#'   age = rep(1:6, each = 30),
+#'   weight = c(
+#'     rnorm(30, 0.05, 0.01), rnorm(30, 0.12, 0.015),
+#'     rnorm(30, 0.20, 0.02), rnorm(30, 0.30, 0.025),
+#'     rnorm(30, 0.41, 0.03), rnorm(30, 0.53, 0.035)
+#'   ),
+#'   sex = rep(c("male", "female"), 90)
+#' )
+#' wt_model <- fit_weight_age(aged_data, by_sex = TRUE)
+#'
+#' # Step 2: Assign ages to full fish dataset
+#' test_data <- generate_test_data()
+#' fish_data <- test_data$fish_data
+#' fish_data$otolith_weight <- runif(nrow(fish_data), 0.03, 0.60)
+#' fish_data$sex <- sample(c("male", "female", "unsexed"), nrow(fish_data), replace = TRUE)
+#' fish_data_aged <- assign_ages_from_weight(fish_data, wt_model, method = "mode")
+#'
+#' # Step 3: Calculate scaled age compositions
+#' age_comps <- calculate_age_compositions_from_weight(
+#'   fish_data = fish_data_aged,
+#'   strata_data = test_data$strata_data,
+#'   age_range = c(1, 6),
+#'   lw_params_male = c(a = 0.01, b = 3.0),
+#'   lw_params_female = c(a = 0.01, b = 3.0),
+#'   lw_params_unsexed = c(a = 0.01, b = 3.0),
+#'   bootstraps = 100
+#' )
+#'
+#' # Step 4: Visualize (existing plot methods work unchanged)
+#' plot(age_comps)
+#' get_summary(age_comps)
+#' }
+#'
+#' @seealso \code{\link{fit_weight_age}}, \code{\link{assign_ages_from_weight}},
+#'   \code{\link{calculate_age_compositions_from_cohort}}, \code{\link{calculate_length_compositions}}
+#' @export
+calculate_age_compositions_from_weight <- function(fish_data,
+                                                   strata_data,
+                                                   age_range,
+                                                   lw_params_male,
+                                                   lw_params_female,
+                                                   lw_params_unsexed,
+                                                   bootstraps = 300,
+                                                   plus_group_age = TRUE,
+                                                   minus_group_age = FALSE,
+                                                   weight_age_model = NULL,
+                                                   verbose = TRUE) {
+  if (!is.data.frame(fish_data)) {
+    stop("fish_data must be a data frame")
+  }
+
+  if (!is.data.frame(strata_data)) {
+    stop("strata_data must be a data frame")
+  }
+
+  if (!"age" %in% names(fish_data)) {
+    stop("fish_data must contain 'age' column. Use assign_ages_from_weight() first.")
+  }
+
+  required_fish_cols <- c("age", "length", "stratum", "sample_id", "male", "female", "unsexed")
+  missing_fish_cols <- setdiff(required_fish_cols, names(fish_data))
+  if (length(missing_fish_cols) > 0) {
+    stop("fish_data is missing required columns: ", paste(missing_fish_cols, collapse = ", "))
+  }
+
+  if ("sample_weight_kg" %in% names(fish_data) && "total_catch_weight_kg" %in% names(fish_data)) {
+    scaling_type <- "weight"
+    if (!"stratum_total_catch_kg" %in% names(strata_data)) {
+      stop("strata_data must contain 'stratum_total_catch_kg' for weight-based scaling")
+    }
+  } else if ("sample_area_km2" %in% names(fish_data) && "catch_density_kg_km2" %in% names(fish_data)) {
+    scaling_type <- "density"
+    if (!"stratum_area_km2" %in% names(strata_data)) {
+      stop("strata_data must contain 'stratum_area_km2' for density-based scaling")
+    }
+  } else {
+    stop(
+      "fish_data must contain either (sample_weight_kg, total_catch_weight_kg) for weight-based ",
+      "or (sample_area_km2, catch_density_kg_km2) for density-based scaling"
+    )
+  }
+
+  fish_strata <- unique(fish_data$stratum)
+  strata_data_strata <- unique(strata_data$stratum)
+  missing_strata <- setdiff(fish_strata, strata_data_strata)
+  if (length(missing_strata) > 0) {
+    stop(
+      "The following strata in fish_data are not present in strata_data: ",
+      paste(missing_strata, collapse = ", ")
+    )
+  }
+
+  if (!is.null(weight_age_model)) {
+    if (!inherits(weight_age_model, "weight_age_model")) {
+      stop("weight_age_model must be a fitted weight_age_model object from fit_weight_age()")
+    }
+    if (!"otolith_weight" %in% names(fish_data)) {
+      stop("fish_data must contain 'otolith_weight' column to re-assign ages with weight_age_model")
+    }
+  }
+
+  # Remove fish with NA age from composition calculations
+  n_na_age <- sum(is.na(fish_data$age))
+  if (n_na_age > 0) {
+    message("Removing ", n_na_age, " fish with NA age from composition calculations.")
+    fish_data <- fish_data[!is.na(fish_data$age), ]
+  }
+
+  if (!"total" %in% names(fish_data)) {
+    fish_data$total <- fish_data$male + fish_data$female + fish_data$unsexed
+  }
+
+  ages <- age_range[1]:age_range[2]
+  n_ages <- length(ages)
+  strata_names <- unique(fish_data$stratum)
+  n_strata <- length(strata_names)
+
+  if (verbose) {
+    cat("Calculating age compositions from otolith weight model predictions...\n")
+    cat("Age range:", age_range[1], "to", age_range[2], "\n")
+    cat("Scaling method:", scaling_type, "\n")
+    cat("Number of strata:", n_strata, "\n")
+  }
+
+  main_ac <- calculate_age_compositions_core(
+    fish_data, strata_data, age_range,
+    plus_group_age, minus_group_age, scaling_type,
+    lw_params_male, lw_params_female, lw_params_unsexed,
+    ages, strata_names
+  )
+
+  # Calculate pooled results (always needed, even without bootstrap)
+  pooled_ac <- apply(main_ac, c(1, 2), sum)
+
+  # Calculate proportions
+  proportions <- main_ac
+  pooled_proportions <- pooled_ac
+
+  stratum_totals <- apply(main_ac[, "total", , drop = FALSE], 3, sum)
+  meas <- c("male", "female", "unsexed", "total")
+
+  for (i in seq_len(n_strata)) {
+    if (stratum_totals[i] > 0) {
+      proportions[, meas, i] <- main_ac[, meas, i] / stratum_totals[i]
+    }
+  }
+  proportions[, "composition", ] <- array(rep(ages, times = n_strata), dim = c(n_ages, n_strata))
+
+  pooled_total <- sum(pooled_ac[, "total"])
+  if (pooled_total > 0) {
+    pooled_proportions[, meas] <- pooled_ac[, meas] / pooled_total
+  }
+  pooled_proportions[, "composition"] <- ages
+
+  if (bootstraps == 0) {
+    if (verbose) cat("No bootstrap uncertainty estimation requested.\n")
+    result <- list(
+      age_composition = main_ac,
+      age_proportions = proportions,
+      pooled_age_composition = pooled_ac,
+      pooled_age_proportions = pooled_proportions,
+      age_cvs = NA, age_proportions_cvs = NA,
+      pooled_age_cv = NA, pooled_age_proportions_cv = NA,
+      age_ci_lower = NA, age_ci_upper = NA,
+      pooled_age_ci_lower = NA, pooled_age_ci_upper = NA,
+      age_proportions_ci_lower = NA, age_proportions_ci_upper = NA,
+      pooled_age_proportions_ci_lower = NA, pooled_age_proportions_ci_upper = NA,
+      ages = ages, strata_names = strata_names, n_bootstraps = 0,
+      plus_group_age = plus_group_age, minus_group_age = minus_group_age,
+      has_sex_data = TRUE, scaling_type = scaling_type
+    )
+    class(result) <- "age_composition"
+    return(result)
+  }
+
+  # Hierarchical bootstrap
+  if (verbose) cat("Running", bootstraps, "bootstrap iterations...\n")
+
+  ac_bootstraps <- array(0, dim = c(n_ages, 5, n_strata, bootstraps))
+  dimnames(ac_bootstraps) <- list(
+    ages, c("composition", "male", "female", "unsexed", "total"),
+    strata_names, seq_len(bootstraps)
+  )
+
+  for (b in seq_len(bootstraps)) {
+    if (verbose && b %% 50 == 0) cat("Bootstrap iteration", b, "of", bootstraps, "\n")
+
+    boot_data <- resample_fish_data(fish_data)
+    if (!is.null(weight_age_model)) {
+      boot_data <- assign_ages_from_weight(boot_data, weight_age_model, method = "random", verbose = FALSE)
+      boot_data <- boot_data[!is.na(boot_data$age), ]
+    }
+    boot_ac <- calculate_age_compositions_core(
+      boot_data, strata_data, age_range,
+      plus_group_age, minus_group_age, scaling_type,
+      lw_params_male, lw_params_female, lw_params_unsexed,
+      ages, strata_names
+    )
+    ac_bootstraps[, , , b] <- boot_ac
+  }
+
+  # CVs
+  ac_means <- apply(ac_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), mean, na.rm = TRUE)
+  ac_sds <- apply(ac_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), sd, na.rm = TRUE)
+  ac_cvs <- ifelse(ac_means > 0, ac_sds / ac_means, NA_real_)
+
+  pooled_bootstraps <- apply(ac_bootstraps[, meas, , , drop = FALSE], c(1, 2, 4), sum, na.rm = TRUE)
+  pooled_mean <- apply(pooled_bootstraps, c(1, 2), mean, na.rm = TRUE)
+  pooled_sd <- apply(pooled_bootstraps, c(1, 2), sd, na.rm = TRUE)
+  pooled_cv <- ifelse(pooled_mean > 0, pooled_sd / pooled_mean, NA_real_)
+
+  # Bootstrap proportions
+  prop_bootstraps <- ac_bootstraps[, meas, , , drop = FALSE]
+  stratum_totals_boot <- apply(ac_bootstraps[, "total", , , drop = FALSE], c(3, 4), sum, na.rm = TRUE)
+
+  for (i in seq_len(n_strata)) {
+    for (b in seq_len(bootstraps)) {
+      if (is.finite(stratum_totals_boot[i, b]) && stratum_totals_boot[i, b] > 0) {
+        prop_bootstraps[, , i, b] <- ac_bootstraps[, meas, i, b] / stratum_totals_boot[i, b]
+      } else {
+        prop_bootstraps[, , i, b] <- NA_real_
+      }
+    }
+  }
+
+  prop_means <- apply(prop_bootstraps, c(1, 2, 3), mean, na.rm = TRUE)
+  prop_sds <- apply(prop_bootstraps, c(1, 2, 3), sd, na.rm = TRUE)
+  prop_cvs <- ifelse(prop_means > 0, prop_sds / prop_means, NA_real_)
+
+  # Pooled proportion bootstrap
+  pooled_prop_bootstraps <- pooled_bootstraps
+  pooled_totals <- apply(pooled_bootstraps[, "total", , drop = FALSE], 3, sum, na.rm = TRUE)
+  for (b in seq_len(bootstraps)) {
+    if (is.finite(pooled_totals[b]) && pooled_totals[b] > 0) {
+      pooled_prop_bootstraps[, , b] <- pooled_bootstraps[, , b] / pooled_totals[b]
+    } else {
+      pooled_prop_bootstraps[, , b] <- NA_real_
+    }
+  }
+
+  pooled_prop_mean <- apply(pooled_prop_bootstraps, c(1, 2), mean, na.rm = TRUE)
+  pooled_prop_sd <- apply(pooled_prop_bootstraps, c(1, 2), sd, na.rm = TRUE)
+  pooled_prop_cv <- ifelse(pooled_prop_mean > 0, pooled_prop_sd / pooled_prop_mean, NA_real_)
+
+  # Confidence intervals
+  ac_ci_lower <- apply(ac_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
+  ac_ci_upper <- apply(ac_bootstraps[, meas, , , drop = FALSE], c(1, 2, 3), quantile, probs = 0.975, na.rm = TRUE)
+
+  pooled_ci_lower <- apply(pooled_bootstraps, c(1, 2), quantile, probs = 0.025, na.rm = TRUE)
+  pooled_ci_upper <- apply(pooled_bootstraps, c(1, 2), quantile, probs = 0.975, na.rm = TRUE)
+
+  prop_ci_lower <- apply(prop_bootstraps, c(1, 2, 3), quantile, probs = 0.025, na.rm = TRUE)
+  prop_ci_upper <- apply(prop_bootstraps, c(1, 2, 3), quantile, probs = 0.975, na.rm = TRUE)
+
+  pooled_prop_ci_lower <- apply(pooled_prop_bootstraps, c(1, 2), quantile, probs = 0.025, na.rm = TRUE)
+  pooled_prop_ci_upper <- apply(pooled_prop_bootstraps, c(1, 2), quantile, probs = 0.975, na.rm = TRUE)
+
+  result <- list(
+    age_composition = main_ac,
+    age_proportions = proportions,
+    pooled_age_composition = pooled_ac,
+    pooled_age_proportions = pooled_proportions,
+    age_cvs = ac_cvs,
+    age_proportions_cvs = prop_cvs,
+    pooled_age_cv = pooled_cv,
+    pooled_age_proportions_cv = pooled_prop_cv,
+    age_ci_lower = ac_ci_lower,
+    age_ci_upper = ac_ci_upper,
+    pooled_age_ci_lower = pooled_ci_lower,
+    pooled_age_ci_upper = pooled_ci_upper,
+    age_proportions_ci_lower = prop_ci_lower,
+    age_proportions_ci_upper = prop_ci_upper,
+    pooled_age_proportions_ci_lower = pooled_prop_ci_lower,
+    pooled_age_proportions_ci_upper = pooled_prop_ci_upper,
+    ages = ages,
+    strata_names = strata_names,
+    n_bootstraps = bootstraps,
+    plus_group_age = plus_group_age,
+    minus_group_age = minus_group_age,
+    has_sex_data = TRUE,
+    scaling_type = scaling_type
+  )
+
+  class(result) <- "age_composition"
+  return(result)
+}
