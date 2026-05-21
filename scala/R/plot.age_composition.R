@@ -10,6 +10,7 @@ utils::globalVariables(c("age", "value", "sex", "ci_lower", "ci_upper", "stratum
 #' @param type Character, either "composition" or "proportion" (or partial matches). Default is "composition".
 #' @param age_bin_size Numeric, size of age bins for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.
 #' @param unsexed Logical, whether to include unsexed fish category in the plot. Default is FALSE.
+#' @param sexed Logical, if TRUE (default) plot by sex and total; if FALSE, plot only the total (and unsexed if unsexed=TRUE).
 #' @param ... Additional arguments (not used)
 #' @return A ggplot object
 #' @importFrom ggplot2 ggplot aes geom_line geom_ribbon scale_colour_manual scale_fill_manual facet_grid labs ylim
@@ -22,6 +23,7 @@ plot.age_composition <- function(x,
                                  type = "composition",
                                  age_bin_size = NULL,
                                  unsexed = FALSE,
+                                 sexed = TRUE,
                                  ...) {
   # Check if ggplot2 is available
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -163,12 +165,19 @@ plot.age_composition <- function(x,
     plot_data_list <- list()
 
     # Define sex categories to include based on unsexed parameter
-    sex_categories <- if (unsexed) {
-      c("male", "female", "unsexed", "total")
+    if (sexed) {
+      sex_categories <- if (unsexed) {
+        c("male", "female", "unsexed", "total")
+      } else {
+        c("male", "female", "total")
+      }
     } else {
-      c("male", "female", "total")
+      sex_categories <- if (unsexed) {
+        c("unsexed", "total")
+      } else {
+        c("total")
+      }
     }
-
     for (sex_name in sex_categories) {
       if (sex_name %in% colnames(comp_data_2d)) {
         sex_data <- data.frame(
@@ -177,17 +186,13 @@ plot.age_composition <- function(x,
           sex = tools::toTitleCase(as.character(sex_name)),
           stringsAsFactors = FALSE
         )
-
-        # Add confidence intervals if available
         if (!is.null(ci_lower) && !is.null(ci_upper)) {
           sex_data$ci_lower <- ci_lower[, sex_name, 1]
           sex_data$ci_upper <- ci_upper[, sex_name, 1]
         }
-
         plot_data_list[[sex_name]] <- sex_data
       }
     }
-
     plot_data <- do.call(rbind, plot_data_list)
   } else if (!by_stratum) {
     # Use pooled data across all strata
@@ -243,12 +248,19 @@ plot.age_composition <- function(x,
     plot_data_list <- list()
 
     # Define sex categories to include based on unsexed parameter
-    sex_categories <- if (unsexed) {
-      c("male", "female", "unsexed", "total")
+    if (sexed) {
+      sex_categories <- if (unsexed) {
+        c("male", "female", "unsexed", "total")
+      } else {
+        c("male", "female", "total")
+      }
     } else {
-      c("male", "female", "total")
+      sex_categories <- if (unsexed) {
+        c("unsexed", "total")
+      } else {
+        c("total")
+      }
     }
-
     for (sex_name in sex_categories) {
       if (sex_name %in% colnames(comp_data)) {
         sex_data <- data.frame(
@@ -257,28 +269,21 @@ plot.age_composition <- function(x,
           sex = tools::toTitleCase(as.character(sex_name)),
           stringsAsFactors = FALSE
         )
-
-        # Add confidence intervals if available
         if (!is.null(ci_lower) && !is.null(ci_upper)) {
-          # Add confidence intervals with robust error handling
           tryCatch(
             {
               sex_data$ci_lower <- ci_lower[, sex_name]
               sex_data$ci_upper <- ci_upper[, sex_name]
             },
             error = function(e) {
-              # If there's any error with extracting CI data, just use NA values
-              warning(paste("Could not extract confidence intervals for", sex_name, ":", e$message))
               sex_data$ci_lower <- NA
               sex_data$ci_upper <- NA
             }
           )
         }
-
         plot_data_list[[sex_name]] <- sex_data
       }
     }
-
     plot_data <- do.call(rbind, plot_data_list)
   } else {
     # Use by-stratum data
@@ -370,26 +375,40 @@ plot.age_composition <- function(x,
   }
 
   # Set up the basic plot
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = age, y = value, colour = sex))
+  if (sexed) {
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = age, y = value, colour = sex))
+  } else {
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = age, y = value))
+  }
 
   # Add uncertainty ribbons if requested and available
   if (show_CIs && ("ci_lower" %in% names(plot_data)) && ("ci_upper" %in% names(plot_data))) {
-    p <- p + ggplot2::geom_ribbon(
-      ggplot2::aes(ymin = ci_lower, ymax = ci_upper, fill = sex),
-      alpha = 0.3,
-      colour = NA
-    )
+    if (sexed) {
+      p <- p + ggplot2::geom_ribbon(
+        ggplot2::aes(ymin = ci_lower, ymax = ci_upper, fill = sex),
+        alpha = 0.3,
+        colour = NA
+      )
+    } else {
+      p <- p + ggplot2::geom_ribbon(
+        ggplot2::aes(ymin = ci_lower, ymax = ci_upper),
+        alpha = 0.3,
+        colour = NA
+      )
+    }
   }
 
   # Add lines
   p <- p + ggplot2::geom_line()
 
   # Set up faceting for by_stratum plots
-  if (by_stratum) {
-    p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_grid(stratum ~ sex, scales = "fixed")
-  } else if (!is.null(stratum)) {
-    # For single stratum plots, facet by sex only
-    p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_wrap(~sex, scales = "fixed")
+  if (sexed) {
+    if (by_stratum) {
+      p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_grid(stratum ~ sex, scales = "fixed")
+    } else if (!is.null(stratum)) {
+      # For single stratum plots, facet by sex only
+      p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_wrap(~sex, scales = "fixed")
+    }
   }
 
   # Add labels and theme
@@ -402,13 +421,21 @@ plot.age_composition <- function(x,
     "Age (years)"
   }
 
-  p <- p + ylim(0, NA) +
-    ggplot2::labs(
-      x = x_label,
-      y = y_label,
-      colour = "Sex",
-      fill = "Sex"
-    )
+  if (sexed) {
+    p <- p +
+      ggplot2::labs(
+        x = x_label,
+        y = y_label,
+        colour = "Sex",
+        fill = "Sex"
+      )
+  } else {
+    p <- p +
+      ggplot2::labs(
+        x = x_label,
+        y = y_label
+      )
+  }
 
   return(p)
 }

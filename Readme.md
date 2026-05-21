@@ -404,7 +404,7 @@ Notes:
 
 The package provides a complete workflow for calculating scaled age compositions using cohort-based modelling. This approach is particularly powerful for multi-year datasets where cohort tracking provides temporal coherence in age assignments.
 
-![Cohort-based age composition workflow](cohort_workflow.svg)
+![Cohort-based age composition workflow](figures/cohort_workflow.svg)
 
 #### Overview
 
@@ -616,7 +616,7 @@ source("Test/demo_cohort_age_compositions.R")
 
 The package provides a complete workflow for calculating scaled age compositions using otolith weight as the predictor variable. This approach uses the continuous relationship between otolith weight and fish age, fitting an ordinal GAM model that parallels the cohort-based approach.
 
-![Otolith weight-based age composition workflow](weight_workflow.svg)
+![Otolith weight-based age composition workflow](figures/weight_workflow.svg)
 
 ### Overview
 
@@ -859,7 +859,7 @@ adjusted_alk <- adjust_age_length_key_bias(alk, bias_pattern)
 
 The `create_alk()` function provides a comprehensive solution for creating complete age-length keys from raw age data, addressing common problems in fisheries analysis where age-length coverage is incomplete or sparse.
 
-![ALK-based age composition workflow](alk_workflow.svg)
+![ALK-based age composition workflow](figures/alk_workflow.svg)
 
 ### Key Features
 
@@ -1295,6 +1295,9 @@ plot(age_result,
 - **`unsexed`**:
   - `FALSE` (default) - Exclude unsexed fish category from plots
   - `TRUE` - Include unsexed fish category alongside male, female, and total
+- **`sexed`**:
+  - `TRUE` (default) - Plot by sex (male, female, and total; plus unsexed if `unsexed = TRUE`)
+  - `FALSE` - Plot only the total (and unsexed if `unsexed = TRUE`)
 
 ### Length and Age Binning Features
 

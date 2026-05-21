@@ -13,6 +13,7 @@ Creates ggplot visualisations of length composition results.}
   type = "composition",
   length_bin_size = NULL,
   unsexed = FALSE,
+  sexed = TRUE,
   ...
 )
 }
@@ -30,6 +31,8 @@ Creates ggplot visualisations of length composition results.}
 \item{length_bin_size}{Numeric, size of length bins in cm for aggregating data (e.g., 2, 5). If NULL (default), no binning is performed.}
 
 \item{unsexed}{Logical, whether to include unsexed fish category in the plot. Default is FALSE.}
+
+\item{sexed}{Logical, if TRUE (default) plot by sex and total; if FALSE, plot only the total (and unsexed if unsexed=TRUE).}
 
 \item{...}{Additional arguments (not used)}
 }
