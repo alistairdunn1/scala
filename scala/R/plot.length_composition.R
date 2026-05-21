@@ -337,16 +337,23 @@ plot.length_composition <- function(x,
       }
     }
 
-    # Define sex categories to include based on unsexed parameter
+    # Define sex categories to include based on sexed and unsexed parameters
     all_sex_categories <- dimnames(comp_data)[[2]]
     # Filter out non-sex categories like "composition"
     valid_sex_categories <- all_sex_categories[all_sex_categories %in% c("male", "female", "unsexed", "total")]
 
-    sex_categories <- if (unsexed) {
-      valid_sex_categories
+    if (sexed) {
+      sex_categories <- if (unsexed) {
+        valid_sex_categories
+      } else {
+        valid_sex_categories[valid_sex_categories != "unsexed"]
+      }
     } else {
-      # Filter out 'unsexed' from sex categories
-      valid_sex_categories[valid_sex_categories != "unsexed"]
+      sex_categories <- if (unsexed) {
+        c("unsexed", "total")[c("unsexed", "total") %in% valid_sex_categories]
+      } else {
+        "total"
+      }
     }
 
     # Convert 3D array to long format data frame
@@ -426,13 +433,15 @@ plot.length_composition <- function(x,
   p <- p + ggplot2::geom_line()
 
   # Set up faceting for by_stratum plots
-  if (sexed) {
-    if (by_stratum) {
+  if (by_stratum) {
+    if (sexed) {
       p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_grid(stratum ~ sex, scales = "fixed")
-    } else if (!is.null(stratum)) {
-      # For single stratum plots, facet by sex only
-      p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_wrap(~sex, scales = "fixed")
+    } else {
+      p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_wrap(~stratum, scales = "fixed")
     }
+  } else if (!is.null(stratum) && sexed) {
+    # For single stratum plots, facet by sex only
+    p <- p + ggplot2::ylim(0, NA) + ggplot2::facet_wrap(~sex, scales = "fixed")
   }
 
   # Add labels and theme
