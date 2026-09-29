@@ -3,6 +3,7 @@
 S3method(plot,age_composition)
 S3method(plot,length_composition)
 S3method(plot,multinomial_n)
+S3method(predict,cohort_gam)
 S3method(print,age_composition)
 S3method(print,age_length_key)
 S3method(print,cohort_alk)

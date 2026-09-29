@@ -62,6 +62,9 @@ Assigns ages to individual fish observations using predictions from a fitted coh
 This function uses the \code{predict_age} function from a fitted cohort model to obtain
 age probability distributions for each fish observation. Ages are then assigned according
 to the specified method:
+Probabilities are conditional on positive integer ages in the sampling year and
+sum to one for each predicted fish. Invalid probability distributions stop the
+calculation with an informative error.
 
 **Mode method**: Assigns the age with highest probability (most likely age)
 

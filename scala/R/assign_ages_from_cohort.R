@@ -36,6 +36,9 @@
 #' This function uses the \code{predict_age} function from a fitted cohort model to obtain
 #' age probability distributions for each fish observation. Ages are then assigned according
 #' to the specified method:
+#' Probabilities are conditional on positive integer ages in the sampling year and
+#' sum to one for each predicted fish. Invalid probability distributions stop the
+#' calculation with an informative error.
 #'
 #' **Mode method**: Assigns the age with highest probability (most likely age)
 #'
@@ -188,6 +191,11 @@ assign_ages_from_cohort <- function(fish_data,
     predict_rows <- seq_len(nrow(fish_data))
   }
 
+  if (!length(predict_rows)) {
+    fish_data$age <- rep(NA_real_, nrow(fish_data))
+    return(fish_data)
+  }
+
   if (verbose) {
     cat("Assigning ages using cohort model...\n")
     cat("Method:", method, "\n")
@@ -221,16 +229,13 @@ assign_ages_from_cohort <- function(fish_data,
   # Extract age values from column names (e.g., "age_1" -> 1)
   age_values <- as.numeric(gsub("age_", "", colnames(age_probs)))
 
-  # Check for rows with zero total probability (fish outside model range)
+  # Age assignment requires normalised probabilities on positive integer ages.
   row_sums <- rowSums(age_probs)
-  zero_prob_rows <- which(row_sums == 0 | !is.finite(row_sums))
-  if (length(zero_prob_rows) > 0) {
-    warning(
-      length(zero_prob_rows), " observation(s) had zero age probability ",
-      "(fish may be outside the model's length/year range). ",
-      "These will be assigned NA age."
-    )
+  if (any(!is.finite(age_probs)) || any(age_probs < 0) ||
+      any(abs(row_sums - 1) > 1e-8) || any(age_values < 1 | age_values != floor(age_values))) {
+    stop("Cohort age predictions must be finite, non-negative and normalised on positive integer ages.")
   }
+  zero_prob_rows <- integer(0)
 
   # Assign ages based on method
   assigned_ages_subset <- rep(NA_real_, nrow(age_probs))

@@ -1,13 +1,13 @@
 #' @title Fit Cohort-Based Age-Length Model using GAM
-#' @description Experimental: Fits an ordinal cohort-at-length model using cumulative logit regression
+#' @description Fits an ordinal cohort-at-length model using cumulative logit regression
 #'   to estimate year classes (cohorts) from length and sampling year. Cohorts are defined as
 #'   (sampling_year - age) - age_offset. The model can predict cohorts from length-year observations and
 #'   back-calculate ages given sampling year and length.
 #'
 #' @param cohort_data Data frame with columns: 'age', 'length', 'year', and optionally 'sex'.
-#'   Each row represents one aged fish with known sampling year.
+#'   Each row represents one aged fish with a positive integer age, a finite positive length and an integer sampling year
 #' @param alk_data Alternative name for cohort_data, for compatibility with other functions
-#' @param age_offset Numeric offset for year class calculation: YC = (Year - Age) - age_offset (default 1)
+#' @param age_offset Non-negative integer offset for year class calculation: YC = (Year - Age) - age_offset (default 1)
 #' @param by_sex Logical, whether to fit sex-specific smooth terms (default TRUE)
 #' @param k_length Basis dimension for length smooth terms (default -1 for automatic selection)
 #' @param k_year Basis dimension for year smooth terms (default -1 for automatic selection)
@@ -15,12 +15,12 @@
 #'   Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
 #'   When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.
 #' @param select Logical, whether to add an extra penalty to each smooth term allowing
-#'   terms to be penalized to zero (variable selection). Recommended for models with
+#'   terms to be penalised to zero (variable selection). Recommended for models with
 #'   multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.
 #' @param gamma Numeric multiplier for the effective degrees of freedom in the smoothing
 #'   parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
 #'   help guard against overfitting (default 1.4, following Wood 2006 recommendation).
-#' @param method Smoothing parameter estimation method for mgcv (default "REML")
+#' @param method Smoothing parameter estimation method, either "REML" or "ML"
 #' @param weights Optional weights for observations (default NULL)
 #' @param verbose Logical, whether to print model fitting details (default TRUE)
 #'
@@ -29,9 +29,9 @@
 #'     \item \code{model}: The fitted mgcv::gam model object
 #'     \item \code{predict_cohort}: Function(lengths, years, sex) that returns cohort probabilities
 #'     \item \code{predict_age}: Function(lengths, sampling_years, sex) that returns age probabilities
-#'     \item \code{summary}: Model summary including deviance explained and significance tests
+#'     \item \code{model_summary}: Model summary including deviance explained and significance tests
 #'     \item \code{by_sex}: Logical indicating whether sex-specific terms were used
-#'     \item \code{cohort_levels}: Vector of cohort levels in the model
+#'     \item \code{cohorts}: Vector of cohort levels in the model
 #'     \item \code{sex_levels}: Vector of sex levels (if applicable)
 #'     \item \code{year_range}: Range of years in training data
 #'     \item \code{age_offset}: The age offset used in cohort calculation
@@ -41,6 +41,20 @@
 #' The function fits an ordinal regression model using the cumulative logit link function
 #' to model cohorts (year classes) as a function of length and year. Cohorts are calculated
 #' as: cohort = (sampling_year - age) - age_offset.
+#'
+#' Fitting and prediction condition on positive integer ages in each sampling year.
+#' A cohort is admissible when sampling_year - cohort - age_offset is at least one.
+#' The likelihood divides the observed cohort probability by the total probability
+#' of admissible cohorts. Smooth coefficients, cohort cut-points and smoothing
+#' parameters are estimated under this conditional likelihood. Age zero is outside
+#' the sampling support of this method.
+#'
+#' Cohort and age predictions sum to one for each fish. Inadmissible cohorts have
+#' probability zero. Prediction stops when no fitted cohort implies a positive age.
+#' The fitted GAM supports stats::predict(model, newdata, type = "response")
+#' with the same conditional probabilities. The returned age_support metadata
+#' records the minimum age and conditioning rule.
+
 #'
 #' The model structure is:
 #'
@@ -106,7 +120,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   }
   # Check if mgcv is available
   if (!requireNamespace("mgcv", quietly = TRUE)) {
-    stop("mgcv package is required for cohort age-length modeling. Install with: install.packages('mgcv')")
+    stop("mgcv package is required for cohort age-length modelling. Install with: install.packages('mgcv')")
   }
 
   # Validate input type first
@@ -132,18 +146,36 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     }
   }
 
-  # Standardize sex categories to lowercase to avoid case sensitivity issues
+  # Standardise sex categories to lowercase to avoid case sensitivity issues
   if ("sex" %in% names(cohort_data)) {
     cohort_data$sex <- tolower(cohort_data$sex)
   }
 
-  # Validate age_offset
-  if (!is.numeric(age_offset) || length(age_offset) != 1) {
-    stop("age_offset must be a single numeric value")
+  # Validate the observed support before constructing the likelihood.
+  if (!is.numeric(age_offset) || length(age_offset) != 1L ||
+      !is.finite(age_offset) || age_offset < 0 || age_offset != floor(age_offset)) {
+    stop("age_offset must be a finite non-negative integer.")
   }
-
-  if (age_offset < 0) {
-    stop("age_offset must be >= 0")
+  if (length(method) != 1L || is.na(method) || !method %in% c("REML", "ML")) {
+    stop("method must be REML or ML for the conditional cohort likelihood.")
+  }
+  if (nrow(cohort_data) < 2L) stop("At least two aged observations are required.")
+  for (variable in c("age", "length", "year")) {
+    if (!is.numeric(cohort_data[[variable]]) || any(!is.finite(cohort_data[[variable]]))) {
+      stop(variable, " must contain finite numeric values.")
+    }
+  }
+  if (any(cohort_data$age < 1 | cohort_data$age != floor(cohort_data$age))) {
+    stop("age must contain positive integers.")
+  }
+  if (any(cohort_data$year != floor(cohort_data$year))) stop("year must contain integers.")
+  if (any(cohort_data$length <= 0)) stop("length must contain positive values.")
+  if (by_sex && (anyNA(cohort_data$sex) || any(!nzchar(cohort_data$sex)))) {
+    stop("sex must be observed for every aged fish.")
+  }
+  if (!is.null(weights) && (!is.numeric(weights) || length(weights) != nrow(cohort_data) ||
+      any(!is.finite(weights)) || any(weights < 0) || !any(weights > 0))) {
+    stop("weights must be finite non-negative observation weights with a positive total.")
   }
 
   # Calculate cohorts: cohort = (year - age) - age_offset
@@ -152,7 +184,9 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   # Convert cohort to ordered factor then integer for mgcv::ocat
   cohort_data$cohort <- as.ordered(cohort_data$cohort)
   cohort_levels <- levels(cohort_data$cohort)
-  cohort_data$cohort <- as.integer(cohort_data$cohort) # required by ocat
+  cohort_data$cohort <- as.integer(cohort_data$cohort)
+  if (length(cohort_levels) < 2L) stop("At least two observed cohorts are required.")
+  valid_last <- findInterval(cohort_data$year - age_offset - 1, as.numeric(cohort_levels))
 
   if (verbose) {
     cat("Fitting cohort-based age-length model...\n")
@@ -248,17 +282,27 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
       gam_model <- mgcv::gam(
         formula = formula,
         data = cohort_data,
-        family = mgcv::ocat(R = length(cohort_levels)), # Ordered categorical
+        family = cohort_age_family(length(cohort_levels), valid_last),
         weights = weights,
         method = method,
         select = select,
-        gamma = gamma
+        gamma = gamma,
+        na.action = stats::na.fail
       )
     },
     error = function(e) {
       stop("Error fitting GAM model: ", e$message)
     }
   )
+
+  if (!isTRUE(gam_model$converged) || any(!is.finite(stats::coef(gam_model))) ||
+      (!is.null(gam_model$outer.info$conv) && gam_model$outer.info$conv != "full convergence")) {
+    stop("Conditional cohort model did not converge to a finite solution.")
+  }
+  gam_model$cohorts <- as.numeric(cohort_levels)
+  gam_model$age_offset <- age_offset
+  gam_model$age_support <- list(minimum_age = 1L, conditional = TRUE)
+  class(gam_model) <- c("cohort_gam", class(gam_model))
 
   if (verbose) {
     cat("Model fitted successfully!\n")
@@ -281,6 +325,9 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
 
     if (length(lengths) != length(years)) {
       stop("lengths and years must have the same length")
+    }
+    if (!length(lengths) || any(!is.finite(lengths)) || any(lengths <= 0)) {
+      stop("lengths must contain finite positive values.")
     }
 
     if (by_sex && is.null(sex)) {
@@ -324,84 +371,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
       }
     }
 
-    # Use the same prediction logic as fit_ordinal_alk
-    n_cohorts <- length(cohort_levels)
-    n_obs <- nrow(newdata)
-
-    if (n_cohorts == 1) {
-      prob_matrix <- matrix(1, nrow = n_obs, ncol = 1)
-      colnames(prob_matrix) <- paste0("cohort_", cohort_levels)
-      return(prob_matrix)
-    }
-
-    # Try response first
-    prob_matrix <- NULL
-    resp_ok <- FALSE
-    resp_try <- try(stats::predict(gam_model, newdata = newdata, type = "response"), silent = TRUE)
-    if (!inherits(resp_try, "try-error") && !is.null(resp_try)) {
-      if (is.matrix(resp_try) && ncol(resp_try) %in% c(n_cohorts, n_cohorts - 1)) {
-        if (ncol(resp_try) == n_cohorts) {
-          prob_matrix <- resp_try
-          resp_ok <- TRUE
-        } else if (ncol(resp_try) == (n_cohorts - 1)) {
-          # Interpret as cumulative probs and convert to class probs
-          cumprob <- resp_try
-          prob_matrix <- matrix(NA_real_, nrow = n_obs, ncol = n_cohorts)
-          prob_matrix[, 1] <- cumprob[, 1]
-          if (n_cohorts > 2) {
-            for (j in 2:(n_cohorts - 1)) prob_matrix[, j] <- cumprob[, j] - cumprob[, j - 1]
-          }
-          prob_matrix[, n_cohorts] <- 1 - cumprob[, n_cohorts - 1]
-          resp_ok <- TRUE
-        }
-      } else if (is.vector(resp_try) && length(resp_try) == n_obs * n_cohorts) {
-        prob_matrix <- matrix(resp_try, nrow = n_obs, ncol = n_cohorts)
-        resp_ok <- TRUE
-      }
-    }
-
-    if (!resp_ok) {
-      # Fallback: get cumulative logits and convert
-      pred_link <- stats::predict(gam_model, newdata = newdata, type = "link")
-
-      # Coerce to matrix (n_obs x (K-1)) robustly
-      if (is.matrix(pred_link)) {
-        if (nrow(pred_link) == n_obs && ncol(pred_link) == (n_cohorts - 1)) {
-          # as-is
-        } else if (nrow(pred_link) == (n_cohorts - 1) && ncol(pred_link) == n_obs) {
-          pred_link <- t(pred_link)
-        } else if (length(as.numeric(pred_link)) == n_obs * (n_cohorts - 1)) {
-          pred_link <- matrix(as.numeric(pred_link), nrow = n_obs, ncol = (n_cohorts - 1))
-        } else {
-          stop("Unexpected shape from predict(type='link') for ocat family")
-        }
-      } else {
-        v <- as.numeric(pred_link)
-        if (length(v) == n_obs * (n_cohorts - 1)) {
-          pred_link <- matrix(v, nrow = n_obs, ncol = (n_cohorts - 1))
-        } else {
-          stop("Could not coerce prediction to matrix: lengths and cohorts mismatch")
-        }
-      }
-
-      cumprob <- stats::plogis(pred_link) # n_obs x (K-1)
-      prob_matrix <- matrix(NA_real_, nrow = n_obs, ncol = n_cohorts)
-      prob_matrix[, 1] <- cumprob[, 1]
-      if (n_cohorts > 2) {
-        for (j in 2:(n_cohorts - 1)) prob_matrix[, j] <- cumprob[, j] - cumprob[, j - 1]
-      }
-      prob_matrix[, n_cohorts] <- 1 - cumprob[, n_cohorts - 1]
-    }
-
-    # Finalize: name, clip, normalize
-    colnames(prob_matrix) <- paste0("cohort_", cohort_levels)
-    prob_matrix[!is.finite(prob_matrix)] <- 0
-    prob_matrix[prob_matrix < 0] <- 0
-    rs <- rowSums(prob_matrix)
-    keep <- rs > 0 & is.finite(rs)
-    if (any(keep)) prob_matrix[keep, ] <- prob_matrix[keep, , drop = FALSE] / rs[keep]
-
-    return(prob_matrix)
+    stats::predict(gam_model, newdata = newdata, type = "response")
   }
 
   # Create age back-calculation function
@@ -424,61 +394,17 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     # Pass through any additional spatial/temporal arguments
     cohort_probs <- predict_cohort(lengths, sampling_years, sex, ...)
 
-    # Convert cohort probabilities to age probabilities
-    # age = sampling_year - cohort + 1, so cohort = sampling_year - age + 1
-    n_obs <- length(lengths)
+    # Map each admissible cohort probability to its positive integer age.
     cohort_years <- as.numeric(cohort_levels)
-
-    # Calculate possible ages for each observation
-    # age = sampling_year - cohort - age_offset, so cohort = sampling_year - age - age_offset
-    age_matrices <- list()
-    for (i in seq_len(n_obs)) {
-      ages_for_obs <- sampling_years[i] - cohort_years - age_offset
-      valid_ages <- ages_for_obs[ages_for_obs > 0] # Only positive ages
-
-      if (length(valid_ages) == 0) {
-        warning("No valid ages for observation ", i, " (sampling year ", sampling_years[i], ")")
-        next
-      }
-
-      # Create age probability vector for this observation
-      age_probs <- numeric(max(valid_ages))
-      for (j in seq_along(valid_ages)) {
-        if (valid_ages[j] <= length(age_probs)) {
-          cohort_idx <- which(cohort_years == (sampling_years[i] - valid_ages[j] - age_offset))
-          if (length(cohort_idx) == 1) {
-            age_probs[valid_ages[j]] <- cohort_probs[i, cohort_idx]
-          }
-        }
-      }
-
-      age_matrices[[i]] <- age_probs
+    maximum_age <- max(sampling_years - min(cohort_years) - age_offset)
+    age_matrix <- matrix(0, length(lengths), maximum_age)
+    for (i in seq_along(lengths)) {
+      ages <- sampling_years[i] - cohort_years - age_offset
+      valid <- ages >= 1
+      age_matrix[i, ages[valid]] <- cohort_probs[i, valid]
     }
-
-    # Standardize to common age range
-    if (length(age_matrices) > 0) {
-      max_age <- max(sapply(age_matrices, length))
-      age_matrix <- matrix(0, nrow = n_obs, ncol = max_age)
-
-      for (i in seq_len(n_obs)) {
-        if (!is.null(age_matrices[[i]])) {
-          age_matrix[i, seq_along(age_matrices[[i]])] <- age_matrices[[i]]
-        }
-      }
-
-      # Remove trailing zero columns
-      last_nonzero <- max(which(colSums(age_matrix) > 0))
-      if (last_nonzero < ncol(age_matrix)) {
-        age_matrix <- age_matrix[, seq_len(last_nonzero), drop = FALSE]
-      }
-
-      colnames(age_matrix) <- paste0("age_", seq_len(ncol(age_matrix)))
-    } else {
-      age_matrix <- matrix(0, nrow = n_obs, ncol = 1)
-      colnames(age_matrix) <- "age_1"
-    }
-
-    return(age_matrix)
+    colnames(age_matrix) <- paste0("age_", seq_len(ncol(age_matrix)))
+    age_matrix
   }
 
   # Create model summary
@@ -510,6 +436,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     year_range = year_range,
     training_years = training_years,
     age_offset = age_offset,
+    age_support = gam_model$age_support,
     additional_terms = additional_terms
   )
 
@@ -536,7 +463,7 @@ print.cohort_alk <- function(x, ...) {
   cat("  Cohort levels:", paste(x$cohorts, collapse = ", "), "\n")
   cat("  Year range:", paste(x$year_range, collapse = " - "), "\n")
   cat("  Training years:", paste(x$training_years, collapse = ", "), "\n")
-  cat("  Family: Ordered categorical (cumulative logit)\n\n")
+  cat("  Family: Ordered categorical conditional on positive integer ages\n\n")
 
   cat("Model fit:\n")
   cat("  Observations:", x$model_summary$n_observations, "\n")

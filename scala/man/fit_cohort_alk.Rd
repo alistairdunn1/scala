@@ -21,11 +21,11 @@ fit_cohort_alk(
 }
 \arguments{
 \item{cohort_data}{Data frame with columns: 'age', 'length', 'year', and optionally 'sex'.
-Each row represents one aged fish with known sampling year.}
+Each row represents one aged fish with a positive integer age, a finite positive length and an integer sampling year}
 
 \item{alk_data}{Alternative name for cohort_data, for compatibility with other functions}
 
-\item{age_offset}{Numeric offset for year class calculation: YC = (Year - Age) - age_offset (default 1)}
+\item{age_offset}{Non-negative integer offset for year class calculation: YC = (Year - Age) - age_offset (default 1)}
 
 \item{by_sex}{Logical, whether to fit sex-specific smooth terms (default TRUE)}
 
@@ -38,14 +38,14 @@ Each element should be a valid mgcv smooth term as a character string (e.g., "te
 When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.}
 
 \item{select}{Logical, whether to add an extra penalty to each smooth term allowing
-terms to be penalized to zero (variable selection). Recommended for models with
+terms to be penalised to zero (variable selection). Recommended for models with
 multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.}
 
 \item{gamma}{Numeric multiplier for the effective degrees of freedom in the smoothing
 parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
 help guard against overfitting (default 1.4, following Wood 2006 recommendation).}
 
-\item{method}{Smoothing parameter estimation method for mgcv (default "REML")}
+\item{method}{Smoothing parameter estimation method, either "REML" or "ML"}
 
 \item{weights}{Optional weights for observations (default NULL)}
 
@@ -57,16 +57,16 @@ A list containing:
     \item \code{model}: The fitted mgcv::gam model object
     \item \code{predict_cohort}: Function(lengths, years, sex) that returns cohort probabilities
     \item \code{predict_age}: Function(lengths, sampling_years, sex) that returns age probabilities
-    \item \code{summary}: Model summary including deviance explained and significance tests
+    \item \code{model_summary}: Model summary including deviance explained and significance tests
     \item \code{by_sex}: Logical indicating whether sex-specific terms were used
-    \item \code{cohort_levels}: Vector of cohort levels in the model
+    \item \code{cohorts}: Vector of cohort levels in the model
     \item \code{sex_levels}: Vector of sex levels (if applicable)
     \item \code{year_range}: Range of years in training data
     \item \code{age_offset}: The age offset used in cohort calculation
   }
 }
 \description{
-Experimental: Fits an ordinal cohort-at-length model using cumulative logit regression
+Fits an ordinal cohort-at-length model using cumulative logit regression
   to estimate year classes (cohorts) from length and sampling year. Cohorts are defined as
   (sampling_year - age) - age_offset. The model can predict cohorts from length-year observations and
   back-calculate ages given sampling year and length.
@@ -75,6 +75,19 @@ Experimental: Fits an ordinal cohort-at-length model using cumulative logit regr
 The function fits an ordinal regression model using the cumulative logit link function
 to model cohorts (year classes) as a function of length and year. Cohorts are calculated
 as: cohort = (sampling_year - age) - age_offset.
+
+Fitting and prediction condition on positive integer ages in each sampling year.
+A cohort is admissible when sampling_year - cohort - age_offset is at least one.
+The likelihood divides the observed cohort probability by the total probability
+of admissible cohorts. Smooth coefficients, cohort cut-points and smoothing
+parameters are estimated under this conditional likelihood. Age zero is outside
+the sampling support of this method.
+
+Cohort and age predictions sum to one for each fish. Inadmissible cohorts have
+probability zero. Prediction stops when no fitted cohort implies a positive age.
+The fitted GAM supports stats::predict(model, newdata, type = "response")
+with the same conditional probabilities. The returned age_support metadata
+records the minimum age and conditioning rule.
 
 The model structure is:
 

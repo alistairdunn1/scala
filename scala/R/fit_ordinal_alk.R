@@ -1,4 +1,4 @@
-﻿#' @title Fit Ordinal Age-at-Length Model using GAM
+#' @title Fit Ordinal Age-at-Length Model using GAM
 #'
 #' @description Experimental: Fits an ordinal age-at-length model using cumulative logit regression with smooth terms
 #'   for length, optionally by sex. Returns a prediction function that can be used to predict

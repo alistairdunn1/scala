@@ -402,7 +402,7 @@ Notes:
 
 ### Cohort-Based Age Composition Workflow
 
-The package provides a complete workflow for calculating scaled age compositions using cohort-based modelling. This approach is particularly powerful for multi-year datasets where cohort tracking provides temporal coherence in age assignments.
+The package calculates scaled age compositions using cohort probabilities conditional on fish length, sampling year and fitted covariates. Fitting and prediction restrict each fish to cohorts that imply a positive integer age in its sampling year.
 
 ![Cohort-based age composition workflow](figures/cohort_workflow.svg)
 
@@ -461,13 +461,16 @@ These defaults provide enough flexibility to capture non-linear relationships wh
 **Model Features**:
 
 - Fits cohort ~ s(length) + s(year) with optional sex interactions
-- Uses mgcv::ocat with cumulative logit link for stable ordinal modelling
+- Uses a cumulative-logit cohort distribution conditional on positive integer ages
+- Estimates smooth coefficients, cohort cut-points and smoothing parameters under the conditional likelihood
 - Uses `select = TRUE` and `gamma = 1.4` by default for regularisation and overfitting protection
 - Provides two prediction functions: `predict_cohort()` and `predict_age()`
 - Automatically handles sex-specific growth patterns
 - Validates year range and data structure
 
-**Important**: Do not use `predict(cohort_model$model)` directly -- it returns the raw cumulative logit linear predictor for cohorts, not ages. Always use `cohort_model$predict_age()` which converts cohort probabilities to age probabilities.
+`cohort_model$predict_cohort()` and `stats::predict(cohort_model$model, newdata, type = "response")` return cohort probabilities conditional on positive integer ages. `cohort_model$predict_age()` maps those probabilities to ages using sampling year minus cohort minus age offset. Probabilities sum to one for each fish, and inadmissible cohorts have probability zero. Prediction stops if no fitted cohort implies a positive age in the requested year. The default GAM prediction type, `"link"`, returns the latent linear predictor.
+
+The fitting likelihood divides each observed cohort probability by the total probability of admissible cohorts. `method = "REML"` or `method = "ML"` estimates smoothing parameters with this likelihood. Age zero is outside the sampling support, and input ages must be positive integers. The fitted object's `age_support` metadata records this rule.
 
 #### Step 2: Assign Ages to Fish Data
 
