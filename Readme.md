@@ -2546,7 +2546,7 @@ cat("Missing lengths generate explicit warnings\n")
 
 ## Package Information
 
-**Version**: 2026-05 (automatically updated from git commit date)
+**Version**: 2026-09 (automatically updated from git commit date)
 **Author**: Alistair Dunn
 **Maintainer**: Alistair Dunn <alistair.dunn@OceanEnvironmental.co.nz>
 **License**: GPL (>= 3)
@@ -2576,7 +2576,7 @@ citation("scala")
 
 **Suggested citation:**
 
-Dunn, A. (2026). scala: Scaled catch at length and age composition analyses. R package version 2026-05. https://github.com/alistairdunn1/scala
+Dunn, A. (2026). scala: Scaled catch at length and age composition analyses. R package version 2026-09. https://github.com/alistairdunn1/scala
 
 ## Contributing
 

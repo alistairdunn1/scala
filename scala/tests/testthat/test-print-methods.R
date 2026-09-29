@@ -81,10 +81,12 @@ test_that("print.ordinal_alk works", {
   ord_alk <- fit_ordinal_alk(alk_data = generate_test_age_data(), by_sex = FALSE)
 
   # Test that print doesn't error
-  expect_output(print(ord_alk), "Ordinal Age-at-Length Model")
-  expect_output(print(ord_alk), "Model specification:")
-  expect_output(print(ord_alk), "Deviance explained:")
-  expect_output(print(ord_alk), "Age levels:")
+  expect_output(print(ord_alk), "Ordinal age-at-length model (cumulative logit)", fixed = TRUE)
+  expect_output(print(ord_alk), "age ~ s(length, k = 6)", fixed = TRUE)
+  expect_output(print(ord_alk), "Age categories: 1, 2, 3, 4, 5, 6", fixed = TRUE)
+  expect_output(print(ord_alk), "Observations: 100", fixed = TRUE)
+  expect_output(print(ord_alk), "AIC:", fixed = TRUE)
+  expect_output(print(ord_alk), "Effective degrees of freedom:", fixed = TRUE)
 })
 
 test_that("print.cohort_alk works", {
