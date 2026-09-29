@@ -2,7 +2,7 @@
 % Please edit documentation in R/fit_cohort_alk.R
 \name{fit_cohort_alk}
 \alias{fit_cohort_alk}
-\title{Fit Cohort-Based Age-Length Model using GAM}
+\title{Fit a cohort-based age-at-length model}
 \usage{
 fit_cohort_alk(
   cohort_data = NULL,
@@ -16,43 +16,53 @@ fit_cohort_alk(
   gamma = 1.4,
   method = "REML",
   weights = NULL,
-  verbose = TRUE
+  verbose = TRUE,
+  plus_group = NULL
 )
 }
 \arguments{
-\item{cohort_data}{Data frame with columns: 'age', 'length', 'year', and optionally 'sex'.
-Each row represents one aged fish with a positive integer age, a finite positive length and an integer sampling year}
+\item{cohort_data}{Data frame with one row per aged fish, positive integer
+\code{age}, finite positive \code{length}, integer \code{year}, and
+\code{sex} when \code{by_sex = TRUE}, plus other fitted covariates}
 
-\item{alk_data}{Alternative name for cohort_data, for compatibility with other functions}
+\item{alk_data}{Alternative name for \code{cohort_data}; used when
+\code{cohort_data} is \code{NULL}}
 
-\item{age_offset}{Non-negative integer offset for year class calculation: YC = (Year - Age) - age_offset (default 1)}
+\item{age_offset}{Non-negative integer offset defining cohort as
+sampling year minus age minus \code{age_offset}}
 
-\item{by_sex}{Logical, whether to fit sex-specific smooth terms (default TRUE)}
+\item{by_sex}{Logical indicating sex-specific smooths and a sex main effect}
 
-\item{k_length}{Basis dimension for length smooth terms (default -1 for automatic selection)}
+\item{k_length}{Integer basis dimension for the length smooth; non-positive
+values select the automatic rule documented in \code{\link{fit_ordinal_alk}}}
 
-\item{k_year}{Basis dimension for year smooth terms (default -1 for automatic selection)}
+\item{k_year}{Integer basis dimension for the year smooth; non-positive values
+select the automatic rule documented in \code{\link{fit_ordinal_alk}};
+the cohort model includes a year smooth}
 
-\item{additional_terms}{Character vector of additional GAM formula terms to include in the model (default NULL).
-Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
-When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.}
+\item{additional_terms}{Character vector of additional GAM terms; smooth terms
+receive \code{by = sex} when \code{by_sex = TRUE} unless a by variable is
+already specified; parametric terms are used as supplied}
 
-\item{select}{Logical, whether to add an extra penalty to each smooth term allowing
-terms to be penalised to zero (variable selection). Recommended for models with
-multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.}
+\item{select}{Logical indicating extra penalties on smooth null spaces,
+allowing complete smooth terms to shrink towards zero}
 
-\item{gamma}{Numeric multiplier for the effective degrees of freedom in the smoothing
-parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
-help guard against overfitting (default 1.4, following Wood 2006 recommendation).}
+\item{gamma}{Multiplier of effective degrees of freedom in the smoothing
+criterion, with larger values favouring smoother fits}
 
-\item{method}{Smoothing parameter estimation method, either "REML" or "ML"}
+\item{method}{Smoothing parameter estimation method, either \code{"REML"}
+or \code{"ML"}}
 
-\item{weights}{Optional weights for observations (default NULL)}
+\item{weights}{Optional finite non-negative observation likelihood weights,
+one per input row, with a positive total; \code{NULL} gives equal weights}
 
-\item{verbose}{Logical, whether to print model fitting details (default TRUE)}
+\item{verbose}{Logical indicating whether fitting details are printed}
+
+\item{plus_group}{Optional positive integer defining an inclusive upper-age
+category; \code{NULL} (the default) applies no plus group}
 }
 \value{
-A list containing:
+A cohort_alk list containing:
   \itemize{
     \item \code{model}: The fitted mgcv::gam model object
     \item \code{predict_cohort}: Function(lengths, years, sex) that returns cohort probabilities
@@ -63,13 +73,20 @@ A list containing:
     \item \code{sex_levels}: Vector of sex levels (if applicable)
     \item \code{year_range}: Range of years in training data
     \item \code{age_offset}: The age offset used in cohort calculation
+    \item \code{training_years}: Sorted sampling years in the fitting data
+    \item \code{age_support}: The minimum age and conditional support rule
+    \item \code{plus_group}: The selected inclusive threshold, or NULL
+    \item \code{oldest_cohort_is_tail}: Whether the oldest category represents
+      a pooled tail of cohorts
+    \item \code{deviance_explained}: Deviance explained as a percentage
+    \item \code{additional_terms}: The additional model terms supplied
   }
 }
 \description{
-Fits an ordinal cohort-at-length model using cumulative logit regression
-  to estimate year classes (cohorts) from length and sampling year. Cohorts are defined as
-  (sampling_year - age) - age_offset. The model can predict cohorts from length-year observations and
-  back-calculate ages given sampling year and length.
+Fits a cumulative-logit model for cohorts conditional on positive
+  integer ages, with smooth effects of length and year and optionally sex and
+  other covariates. Cohort probabilities are converted to age probabilities
+  using the sampling year and age offset.
 }
 \details{
 The function fits an ordinal regression model using the cumulative logit link function
@@ -83,11 +100,46 @@ of admissible cohorts. Smooth coefficients, cohort cut-points and smoothing
 parameters are estimated under this conditional likelihood. Age zero is outside
 the sampling support of this method.
 
+Basis dimensions limit smooth complexity; smoothing parameters are estimated.
+The automatic rules are documented in \code{\link{fit_ordinal_alk}}. Shared
+arguments have the same meanings across the three age-at-length methods.
+Cohort and direct-age ordinal models support REML and ML; the multinomial
+model supports REML. The cohort model includes a year smooth; direct-age
+models include one when k_year is supplied. Parametric additional terms are
+used as supplied, including factor(year) for annual effects.
+
+With \code{plus_group = P}, an observation aged P or older contributes the
+summed probability of cohorts implying age at least P in its sampling year.
+It is a censored age observation, not an exact birth-cohort observation.
+Younger observations retain their exact cohort categories. The oldest cohort
+category pools the tail at or before the first sampling year minus P minus
+age_offset. At least one observation below P is required.
+Choose P for each analysis; no threshold is selected automatically.
+For example, \code{plus_group = 50} represents 50+, but 50 is not a default.
+The model does not estimate the age distribution within that pooled tail.
+Treating the plus-group label as an exact age yields a mean of capped ages,
+not the mean actual age.
+
 Cohort and age predictions sum to one for each fish. Inadmissible cohorts have
 probability zero. Prediction stops when no fitted cohort implies a positive age.
 The fitted GAM supports stats::predict(model, newdata, type = "response")
 with the same conditional probabilities. The returned age_support metadata
 records the minimum age and conditioning rule.
+With a plus group, predict_age returns columns age_1 through age_P and sums
+all probabilities for ages at least P into age_P. Cohort predictions retain
+the fitted cohort categories; the oldest label denotes a pooled tail when
+oldest_cohort_is_tail is TRUE. Plus-group predictions require sampling years
+at or after the first training year because the pooled tail cannot be split
+into younger ages for earlier years. Random cohort-response simulation from
+a censored fitted family requires a separate censoring design and stops.
+
+Prediction covariates are supplied through named arguments to the returned
+helpers. predict_age recycles a scalar sampling_years argument across lengths.
+Observation weights are likelihood weights, not catch totals. Missing fitting
+covariates, failed convergence and invalid predictions stop with an error.
+Aged samples selected by length support conditional age probabilities when
+sampling within modelled covariate strata is independent of age. Catch age
+compositions require representative length data and appropriate catch expansion.
 
 The model structure is:
 
@@ -141,5 +193,5 @@ print(age_probs)
 
 }
 \seealso{
-\code{\link{fit_ordinal_alk}}, \code{\link{create_alk}}, \code{\link[mgcv]{gam}}
+\code{\link{fit_ordinal_alk}}, \code{\link{fit_multinomial_alk}}, \code{\link{create_alk}}, \code{\link[mgcv]{gam}}
 }

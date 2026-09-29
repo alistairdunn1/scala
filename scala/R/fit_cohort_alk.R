@@ -1,30 +1,25 @@
-#' @title Fit Cohort-Based Age-Length Model using GAM
-#' @description Fits an ordinal cohort-at-length model using cumulative logit regression
-#'   to estimate year classes (cohorts) from length and sampling year. Cohorts are defined as
-#'   (sampling_year - age) - age_offset. The model can predict cohorts from length-year observations and
-#'   back-calculate ages given sampling year and length.
+#' Fit a cohort-based age-at-length model
 #'
-#' @param cohort_data Data frame with columns: 'age', 'length', 'year', and optionally 'sex'.
-#'   Each row represents one aged fish with a positive integer age, a finite positive length and an integer sampling year
-#' @param alk_data Alternative name for cohort_data, for compatibility with other functions
-#' @param age_offset Non-negative integer offset for year class calculation: YC = (Year - Age) - age_offset (default 1)
-#' @param by_sex Logical, whether to fit sex-specific smooth terms (default TRUE)
-#' @param k_length Basis dimension for length smooth terms (default -1 for automatic selection)
-#' @param k_year Basis dimension for year smooth terms (default -1 for automatic selection)
-#' @param additional_terms Character vector of additional GAM formula terms to include in the model (default NULL).
-#'   Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
-#'   When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.
-#' @param select Logical, whether to add an extra penalty to each smooth term allowing
-#'   terms to be penalised to zero (variable selection). Recommended for models with
-#'   multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.
-#' @param gamma Numeric multiplier for the effective degrees of freedom in the smoothing
-#'   parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
-#'   help guard against overfitting (default 1.4, following Wood 2006 recommendation).
-#' @param method Smoothing parameter estimation method, either "REML" or "ML"
-#' @param weights Optional weights for observations (default NULL)
-#' @param verbose Logical, whether to print model fitting details (default TRUE)
+#' @description Fits a cumulative-logit model for cohorts conditional on positive
+#'   integer ages, with smooth effects of length and year and optionally sex and
+#'   other covariates. Cohort probabilities are converted to age probabilities
+#'   using the sampling year and age offset.
 #'
-#' @return A list containing:
+#' @inheritParams fit_ordinal_alk
+#' @param cohort_data Data frame with one row per aged fish, positive integer
+#'   \code{age}, finite positive \code{length}, integer \code{year}, and
+#'   \code{sex} when \code{by_sex = TRUE}, plus other fitted covariates
+#' @param alk_data Alternative name for \code{cohort_data}; used when
+#'   \code{cohort_data} is \code{NULL}
+#' @param age_offset Non-negative integer offset defining cohort as
+#'   sampling year minus age minus \code{age_offset}
+#' @param k_length Integer basis dimension for the length smooth; non-positive
+#'   values select the automatic rule documented in \code{\link{fit_ordinal_alk}}
+#' @param k_year Integer basis dimension for the year smooth; non-positive values
+#'   select the automatic rule documented in \code{\link{fit_ordinal_alk}};
+#'   the cohort model includes a year smooth
+#'
+#' @return A cohort_alk list containing:
 #'   \itemize{
 #'     \item \code{model}: The fitted mgcv::gam model object
 #'     \item \code{predict_cohort}: Function(lengths, years, sex) that returns cohort probabilities
@@ -35,6 +30,13 @@
 #'     \item \code{sex_levels}: Vector of sex levels (if applicable)
 #'     \item \code{year_range}: Range of years in training data
 #'     \item \code{age_offset}: The age offset used in cohort calculation
+#'     \item \code{training_years}: Sorted sampling years in the fitting data
+#'     \item \code{age_support}: The minimum age and conditional support rule
+#'     \item \code{plus_group}: The selected inclusive threshold, or NULL
+#'     \item \code{oldest_cohort_is_tail}: Whether the oldest category represents
+#'       a pooled tail of cohorts
+#'     \item \code{deviance_explained}: Deviance explained as a percentage
+#'     \item \code{additional_terms}: The additional model terms supplied
 #'   }
 #'
 #' @details
@@ -49,12 +51,46 @@
 #' parameters are estimated under this conditional likelihood. Age zero is outside
 #' the sampling support of this method.
 #'
+#' Basis dimensions limit smooth complexity; smoothing parameters are estimated.
+#' The automatic rules are documented in \code{\link{fit_ordinal_alk}}. Shared
+#' arguments have the same meanings across the three age-at-length methods.
+#' Cohort and direct-age ordinal models support REML and ML; the multinomial
+#' model supports REML. The cohort model includes a year smooth; direct-age
+#' models include one when k_year is supplied. Parametric additional terms are
+#' used as supplied, including factor(year) for annual effects.
+#'
+#' With \code{plus_group = P}, an observation aged P or older contributes the
+#' summed probability of cohorts implying age at least P in its sampling year.
+#' It is a censored age observation, not an exact birth-cohort observation.
+#' Younger observations retain their exact cohort categories. The oldest cohort
+#' category pools the tail at or before the first sampling year minus P minus
+#' age_offset. At least one observation below P is required.
+#' Choose P for each analysis; no threshold is selected automatically.
+#' For example, \code{plus_group = 50} represents 50+, but 50 is not a default.
+#' The model does not estimate the age distribution within that pooled tail.
+#' Treating the plus-group label as an exact age yields a mean of capped ages,
+#' not the mean actual age.
+#'
 #' Cohort and age predictions sum to one for each fish. Inadmissible cohorts have
 #' probability zero. Prediction stops when no fitted cohort implies a positive age.
 #' The fitted GAM supports stats::predict(model, newdata, type = "response")
 #' with the same conditional probabilities. The returned age_support metadata
 #' records the minimum age and conditioning rule.
-
+#' With a plus group, predict_age returns columns age_1 through age_P and sums
+#' all probabilities for ages at least P into age_P. Cohort predictions retain
+#' the fitted cohort categories; the oldest label denotes a pooled tail when
+#' oldest_cohort_is_tail is TRUE. Plus-group predictions require sampling years
+#' at or after the first training year because the pooled tail cannot be split
+#' into younger ages for earlier years. Random cohort-response simulation from
+#' a censored fitted family requires a separate censoring design and stops.
+#'
+#' Prediction covariates are supplied through named arguments to the returned
+#' helpers. predict_age recycles a scalar sampling_years argument across lengths.
+#' Observation weights are likelihood weights, not catch totals. Missing fitting
+#' covariates, failed convergence and invalid predictions stop with an error.
+#' Aged samples selected by length support conditional age probabilities when
+#' sampling within modelled covariate strata is independent of age. Catch age
+#' compositions require representative length data and appropriate catch expansion.
 #'
 #' The model structure is:
 #'
@@ -108,12 +144,13 @@
 #'
 #' @importFrom mgcv gam s
 #' @importFrom stats predict model.matrix AIC as.formula
-#' @seealso \code{\link{fit_ordinal_alk}}, \code{\link{create_alk}}, \code{\link[mgcv]{gam}}
+#' @seealso \code{\link{fit_ordinal_alk}}, \code{\link{fit_multinomial_alk}}, \code{\link{create_alk}}, \code{\link[mgcv]{gam}}
 #' @export
 fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, by_sex = TRUE,
                            k_length = -1, k_year = -1, additional_terms = NULL,
                            select = TRUE, gamma = 1.4,
-                           method = "REML", weights = NULL, verbose = TRUE) {
+                           method = "REML", weights = NULL, verbose = TRUE,
+                           plus_group = NULL) {
   # Handle alternative parameter name
   if (is.null(cohort_data) && !is.null(alk_data)) {
     cohort_data <- alk_data
@@ -168,6 +205,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   if (any(cohort_data$age < 1 | cohort_data$age != floor(cohort_data$age))) {
     stop("age must contain positive integers.")
   }
+  validate_alk_plus_group(plus_group)
   if (any(cohort_data$year != floor(cohort_data$year))) stop("year must contain integers.")
   if (any(cohort_data$length <= 0)) stop("length must contain positive values.")
   if (by_sex && (anyNA(cohort_data$sex) || any(!nzchar(cohort_data$sex)))) {
@@ -178,13 +216,17 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     stop("weights must be finite non-negative observation weights with a positive total.")
   }
 
-  # Calculate cohorts: cohort = (year - age) - age_offset
-  cohort_data$cohort <- (cohort_data$year - cohort_data$age) - age_offset
-
-  # Convert cohort to ordered factor then integer for mgcv::ocat
-  cohort_data$cohort <- as.ordered(cohort_data$cohort)
-  cohort_levels <- levels(cohort_data$cohort)
-  cohort_data$cohort <- as.integer(cohort_data$cohort)
+  censored <- rep(FALSE, nrow(cohort_data))
+  if (!is.null(plus_group)) {
+    censored <- cohort_data$age >= plus_group
+    cohort_data$age <- pmin(cohort_data$age, plus_group)
+    if (all(censored)) stop("At least one age below plus_group is required.")
+  }
+  # Censored responses identify a cumulative cohort boundary.
+  cohort_values <- cohort_data$year - cohort_data$age - age_offset
+  cohort_levels <- sort(unique(c(cohort_values,
+    if (any(censored)) min(cohort_data$year) - plus_group - age_offset)))
+  cohort_data$cohort <- match(cohort_values, cohort_levels)
   if (length(cohort_levels) < 2L) stop("At least two observed cohorts are required.")
   valid_last <- findInterval(cohort_data$year - age_offset - 1, as.numeric(cohort_levels))
 
@@ -236,14 +278,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     # Add additional terms with by = sex interaction
     if (!is.null(additional_terms)) {
       for (term in additional_terms) {
-        # Check if term already has 'by =' specification
-        if (grepl("by\\s*=", term)) {
-          formula_parts <- c(formula_parts, term)
-        } else {
-          # Insert 'by = sex' before the closing parenthesis
-          modified_term <- sub("\\)\\s*$", ", by = sex)", term)
-          formula_parts <- c(formula_parts, modified_term)
-        }
+        formula_parts <- c(formula_parts, alk_sex_term(term, by_sex))
       }
     }
 
@@ -282,7 +317,7 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
       gam_model <- mgcv::gam(
         formula = formula,
         data = cohort_data,
-        family = cohort_age_family(length(cohort_levels), valid_last),
+        family = cohort_age_family(length(cohort_levels), valid_last, censored),
         weights = weights,
         method = method,
         select = select,
@@ -302,6 +337,9 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
   gam_model$cohorts <- as.numeric(cohort_levels)
   gam_model$age_offset <- age_offset
   gam_model$age_support <- list(minimum_age = 1L, conditional = TRUE)
+  gam_model$plus_group <- plus_group
+  gam_model$minimum_prediction_year <- min(cohort_data$year)
+  gam_model$oldest_cohort_is_tail <- any(censored)
   class(gam_model) <- c("cohort_gam", class(gam_model))
 
   if (verbose) {
@@ -397,11 +435,16 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     # Map each admissible cohort probability to its positive integer age.
     cohort_years <- as.numeric(cohort_levels)
     maximum_age <- max(sampling_years - min(cohort_years) - age_offset)
+    if (!is.null(plus_group)) maximum_age <- plus_group
     age_matrix <- matrix(0, length(lengths), maximum_age)
     for (i in seq_along(lengths)) {
       ages <- sampling_years[i] - cohort_years - age_offset
       valid <- ages >= 1
-      age_matrix[i, ages[valid]] <- cohort_probs[i, valid]
+      mapped <- ages[valid]
+      if (!is.null(plus_group)) mapped <- pmin(mapped, plus_group)
+      for (age in unique(mapped)) {
+        age_matrix[i, age] <- sum(cohort_probs[i, valid][mapped == age])
+      }
     }
     colnames(age_matrix) <- paste0("age_", seq_len(ncol(age_matrix)))
     age_matrix
@@ -437,6 +480,8 @@ fit_cohort_alk <- function(cohort_data = NULL, alk_data = NULL, age_offset = 1, 
     training_years = training_years,
     age_offset = age_offset,
     age_support = gam_model$age_support,
+    plus_group = plus_group,
+    oldest_cohort_is_tail = any(censored),
     additional_terms = additional_terms
   )
 

@@ -46,7 +46,7 @@ Use \code{\link{assign_ages_from_weight}} to add the age column first.}
 
 \item{weight_age_model}{Optional fitted weight-age model from \code{\link{fit_weight_age}}.
 When supplied, ages are re-assigned randomly on each bootstrap iteration using
-\code{\link{assign_ages_from_weight}}, propagating model uncertainty alongside sampling
+\code{\link{assign_ages_from_weight}}, propagating conditional assignment variability alongside sampling
 uncertainty. Requires \code{fish_data} to contain an \code{otolith_weight} column.
 Has no effect when \code{bootstraps = 0}.}
 
@@ -109,11 +109,13 @@ Uses hierarchical resampling at two levels:
 - Sample-level: Resample samples within strata (captures spatial variation)
 - Fish-level: Resample individual fish within samples (captures within-sample variation)
 
-**Model uncertainty via \code{weight_age_model}:**
+**Conditional assignment variability via \code{weight_age_model}:**
 When \code{weight_age_model} is supplied, ages are re-drawn from the model on every bootstrap
-iteration (after resampling fish), so both sampling uncertainty and model uncertainty contribute
+iteration (after resampling fish), so sampling and conditional assignment variability contribute
 to the bootstrap distribution. When \code{weight_age_model = NULL} (default), bootstrap
 resampling captures sampling uncertainty only.
+The fitted coefficients remain fixed; their uncertainty requires refitting or
+parameter draws in a separate uncertainty analysis.
 
 The output is directly compatible with \code{\link[scala]{plot.age_composition}} and
 \code{\link{get_summary}} — no downstream changes are needed.

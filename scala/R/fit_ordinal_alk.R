@@ -1,416 +1,113 @@
-#' @title Fit Ordinal Age-at-Length Model using GAM
+#' Fit an ordinal age-at-length model
 #'
-#' @description Experimental: Fits an ordinal age-at-length model using cumulative logit regression with smooth terms
-#'   for length, optionally by sex. Returns a prediction function that can be used to predict
-#'   age probabilities for given lengths.
-#'
-#' @param alk_data Age-length key data frame or list (from create_alk() output) with columns:
-#'   'age', 'length', and optionally 'sex'. Each row represents one aged fish.
-#' @param by_sex Logical, whether to fit sex-specific smooth terms (default TRUE)
-#' @param k Basis dimension for smooth terms (default -1 for automatic selection)
-#' @param additional_terms Character vector of additional GAM formula terms to include in the model (default NULL).
-#'   Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
-#'   When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.
-#' @param select Logical, whether to add an extra penalty to each smooth term allowing
-#'   terms to be penalized to zero (variable selection). Recommended for models with
-#'   multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.
-#' @param gamma Numeric multiplier for the effective degrees of freedom in the smoothing
-#'   parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
-#'   help guard against overfitting (default 1.4, following Wood 2006 recommendation).
-#' @param method Smoothing parameter estimation method for mgcv (default "REML")
-#' @param weights Optional weights for observations (default NULL)
-#' @param verbose Logical, whether to print model fitting details (default TRUE)
-#'
-#' @return A list containing:
-#'   \itemize{
-#'     \item \code{model}: The fitted mgcv::gam model object
-#'     \item \code{predict_function}: Function that takes lengths (and optionally sex) and returns age probabilities
-#'     \item \code{summary}: Model summary including deviance explained and significance tests
-#'     \item \code{by_sex}: Logical indicating whether sex-specific terms were used
-#'     \item \code{age_levels}: Vector of age levels in the model
-#'     \item \code{sex_levels}: Vector of sex levels (if applicable)
-#'   }
-#'
+#' @description Fits a cumulative-logit model for positive integer age categories,
+#'   with smooth effects of length and optionally year, sex and other covariates.
+#' @param alk_data Data frame with one row per aged fish, positive integer
+#'   \code{age}, finite positive \code{length}, and \code{sex} when
+#'   \code{by_sex = TRUE}; integer \code{year} and other covariates when included
+#'   in the model, or a named list of sex-specific data frames
+#' @param by_sex Logical indicating sex-specific smooths and a sex main effect
+#' @param k Alias for \code{k_length}; both must agree if supplied together
+#' @param additional_terms Character vector of additional GAM terms; smooth terms
+#'   receive \code{by = sex} when \code{by_sex = TRUE} unless a by variable is
+#'   already specified; parametric terms are used as supplied
+#' @param select Logical indicating extra penalties on smooth null spaces,
+#'   allowing complete smooth terms to shrink towards zero
+#' @param gamma Multiplier of effective degrees of freedom in the smoothing
+#'   criterion, with larger values favouring smoother fits
+#' @param method Smoothing parameter estimation method, either \code{"REML"}
+#'   or \code{"ML"}
+#' @param weights Optional finite non-negative observation likelihood weights,
+#'   one per input row, with a positive total; \code{NULL} gives equal weights
+#' @param verbose Logical indicating whether fitting details are printed
+#' @param k_length Integer basis dimension for the length smooth; non-positive
+#'   values select the automatic rule described in Details; \code{NULL} uses \code{k}
+#' @param k_year Integer basis dimension for the year smooth; non-positive values
+#'   select the automatic rule described in Details; \code{NULL} omits the
+#'   built-in year smooth
+#' @param plus_group Optional positive integer defining an inclusive upper-age
+#'   category; \code{NULL} (the default) applies no plus group
+#' @return An ordinal_alk list containing model, predict_function, predict_age,
+#'   model_summary, deviance_explained (percentage), ages, age_levels, sex_levels,
+#'   by_sex, additional_terms, k_length, k_year, year_range, training_years,
+#'   age_support, response_type and plus_group
 #' @details
-#' The function fits an ordinal regression model using the cumulative logit link function,
-#' which is appropriate for ordered age categories that typically increase with length.
-#' The model structure is:
+#' The model estimates ordered age categories directly. Its response is age,
+#' whereas fit_cohort_alk estimates cohort and converts cohort to age using the
+#' sampling year. Both use a cumulative-logit link, sex-specific smooths when
+#' requested, and the same meanings for select, gamma, method and weights.
+#' Basis dimensions limit smooth complexity; smoothing parameters are estimated.
+#' The automatic length basis dimension is min(10, max(3, floor(n_length / 3))),
+#' where n_length is the number of distinct lengths. The automatic year dimension
+#' is min(n_year - 1, 2) for at most three distinct years, and
+#' min(10, max(3, floor(n_year / 2))) otherwise. The data must support the
+#' requested smooths; mgcv may increase dimensions below its minimum.
 #'
-#' \strong{Without sex effects:}
-#' \code{age ~ s(length)}
+#' Supplying k_year adds a year smooth. With by_sex = TRUE the resulting predictor
+#' is age ~ s(length, by = sex) + s(year, by = sex) + sex, plus additional terms.
+#' A year smooth is optional for direct-age models. For a matched cohort comparison,
+#' specify the same k_length, k_year, additional_terms and fitting settings.
+#' fit_multinomial_alk uses the same age categories and prediction interfaces,
+#' with age-specific log odds rather than shared ordinal cut-points.
 #'
-#' \strong{With sex effects:}
-#' \code{age ~ s(length, by = sex) + sex}
+#' Ages must be positive integers and at least two distinct categories must remain
+#' after grouping. Age categories are the distinct observed ages after grouping.
+#' Missing intermediate ages are not estimated categories. The model assigns
+#' probability only to these positive ages, in fitting and prediction.
+#' Missing fitting covariates, failed convergence and invalid predictions stop
+#' with an error. Observation weights are likelihood weights, not catch totals.
 #'
-#' The cumulative logit model estimates the probability that age <= k for each age level k,
-#' which naturally respects the ordinal nature of age data.
+#' With \code{plus_group = P}, ages at or above P are pooled as P before fitting.
+#' The final category represents P and older, and its prediction is their combined
+#' probability. Choose P for each analysis; no threshold is selected automatically.
+#' For example, \code{plus_group = 50} represents 50+, but 50 is not a default.
+#' The model does not estimate the distribution within the plus group. Treating
+#' its label as an exact age yields a mean of capped ages, not the mean actual age.
 #'
-#' The returned prediction function can be used directly with length composition data
-#' to create age-length keys for use in \code{\link{calculate_age_compositions}}.
+#' predict_function(lengths, sex = NULL, ...) returns one column per observed age,
+#' named age_N. Supply year and other fitted covariates through named arguments.
+#' predict_age(lengths, sampling_years = NULL, sex = NULL, ...) returns columns
+#' age_1 through the maximum observed age, or through P when a plus group is
+#' specified, with zero for unobserved categories.
+#' A scalar sampling year is recycled; other prediction covariates must have
+#' length one or match lengths. Sampling years are required when year is a fitted
+#' covariate. Predictions outside sampled years retain the fitted model's
+#' extrapolation assumptions. No age_offset applies to a direct-age response.
 #'
+#' Aged samples selected by length support conditional age probabilities when
+#' sampling within modelled covariate strata is independent of age. Catch age
+#' compositions require representative length data and appropriate catch expansion.
 #' @examples
 #' \dontrun{
-#' # Generate test age-length data
-#' age_data <- data.frame(
-#'   age = rep(1:8, each = 50),
-#'   length = c(
-#'     rnorm(50, 20, 2), rnorm(50, 25, 2), rnorm(50, 30, 2),
-#'     rnorm(50, 35, 2), rnorm(50, 40, 2), rnorm(50, 45, 2),
-#'     rnorm(50, 50, 2), rnorm(50, 55, 2)
-#'   ),
-#'   sex = rep(c("male", "female"), 200)
-#' )
-#'
-#' # Fit ordinal age-length model
-#' ordinal_model <- fit_ordinal_alk(age_data, by_sex = TRUE, verbose = TRUE)
-#'
-#' # Use the prediction function
-#' test_lengths <- 20:60
-#' test_sex <- rep(c("male", "female"), each = length(test_lengths))
-#'
-#' # Predict age probabilities
-#' age_probs <- ordinal_model$predict_function(test_lengths, test_sex)
-#'
-#' # Create age-length key from predictions
-#' alk_predicted <- data.frame(
-#'   length = rep(test_lengths, 2),
-#'   sex = test_sex,
-#'   age_probs
+#' direct <- fit_ordinal_alk(aged_fish, k_length = 10, k_year = 10,
+#'   additional_terms = "te(long, lat, k = c(6, 6))")
+#' probabilities <- direct$predict_age(c(100, 120), 2025, "female",
+#'   long = c(180, 181), lat = c(-70, -71))
 #' }
-#'
+#' @seealso \code{\link{fit_cohort_alk}}, \code{\link{fit_multinomial_alk}}, \code{\link[mgcv]{gam}}
 #' @importFrom mgcv gam s
 #' @importFrom stats predict model.matrix AIC as.formula
-#' @seealso \code{\link{create_alk}}, \code{\link{calculate_age_compositions}}, \code{\link[mgcv]{gam}}
 #' @export
-
 fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, additional_terms = NULL,
-                            select = TRUE, gamma = 1.4,
-                            method = "REML", weights = NULL, verbose = TRUE) {
-  # Check if mgcv is available
-  if (!requireNamespace("mgcv", quietly = TRUE)) {
-    stop("mgcv package is required for ordinal age-length modeling. Install with: install.packages('mgcv')")
-  }
-
-  # Check for data type first
-  if (!is.data.frame(alk_data) && !is.list(alk_data)) {
-    stop("alk_data must be a data frame")
-  }
-
-  # Handle input data format (could be list from create_alk or data frame)
-  if (is.list(alk_data) && !is.data.frame(alk_data)) {
-    # If it's a list (sex-specific ALKs), combine them
-    if (verbose) cat("Converting sex-specific ALK list to data frame...\n")
-
-    # Check if it has sex-specific structure
-    if (all(names(alk_data) %in% c("male", "female", "unsexed"))) {
-      alk_data <- dplyr::bind_rows(alk_data, .id = "sex")
-    } else {
-      stop("Input ALK list format not recognized. Expected named list with 'male', 'female', 'unsexed' or a data frame.")
-    }
-  }
-
-  # Validate required columns
-  required_cols <- c("age", "length")
-  if (!all(required_cols %in% names(alk_data))) {
-    stop("ALK data must contain 'age' and 'length' columns")
-  }
-
-  # Check for sex column if by_sex is TRUE
-  if (by_sex && !"sex" %in% names(alk_data)) {
-    stop("by_sex = TRUE requires 'sex' column in ALK data")
-  }
-
-  # Validate additional_terms
-  if (!is.null(additional_terms)) {
-    if (!is.character(additional_terms)) {
-      stop("additional_terms must be a character vector")
-    }
-  }
-
-  # Standardize sex categories to lowercase to avoid case sensitivity issues
-  if ("sex" %in% names(alk_data)) {
-    alk_data$sex <- tolower(alk_data$sex)
-  }
-
-  # Convert age to ordered factor then integer 1..K for mgcv::ocat
-  alk_data$age <- as.ordered(alk_data$age)
-  age_levels <- levels(alk_data$age)
-  alk_data$age <- as.integer(alk_data$age) # required by ocat: integer class labels
-
-  if (verbose) {
-    cat("Fitting ordinal age-at-length model...\n")
-    cat("Age levels:", paste(age_levels, collapse = ", "), "\n")
-    cat("Length range:", min(alk_data$length), "to", max(alk_data$length), "\n")
-  }
-
-  # Handle sex if applicable
-  sex_levels <- NULL
-  if (by_sex) {
-    alk_data$sex <- as.factor(alk_data$sex)
-    sex_levels <- levels(alk_data$sex)
-    if (verbose) cat("Sex levels:", paste(sex_levels, collapse = ", "), "\n")
-  }
-
-  # Determine appropriate k value based on data if not specified
-  if (k <= 0) {
-    n_unique_lengths <- length(unique(alk_data$length))
-    k <- min(10, max(3, floor(n_unique_lengths / 3)))
-  }
-
-  if (verbose) cat("Using k =", k, "for length terms\n")
-
-  # Build model formula dynamically
-  if (by_sex) {
-    formula_parts <- c()
-    
-    # Length terms
-    formula_parts <- c(formula_parts, paste0("s(length, by = sex, k = ", k, ")"))
-    
-    # Add additional terms with by = sex interaction
-    if (!is.null(additional_terms)) {
-      for (term in additional_terms) {
-        # Check if term already has 'by =' specification
-        if (grepl("by\\s*=", term)) {
-          formula_parts <- c(formula_parts, term)
-        } else {
-          # Insert 'by = sex' before the closing parenthesis
-          modified_term <- sub("\\)\\s*$", ", by = sex)", term)
-          formula_parts <- c(formula_parts, modified_term)
-        }
-      }
-    }
-    
-    # Add sex main effect
-    formula_parts <- c(formula_parts, "sex")
-    
-    formula <- as.formula(paste("age ~", paste(formula_parts, collapse = " + ")))
-    if (verbose) cat("Model formula: age ~", paste(formula_parts, collapse = " + "), "\n")
-  } else {
-    formula_parts <- c()
-    
-    # Length terms
-    formula_parts <- c(formula_parts, paste0("s(length, k = ", k, ")"))
-    
-    # Add additional terms as-is
-    if (!is.null(additional_terms)) {
-      formula_parts <- c(formula_parts, additional_terms)
-    }
-    
-    formula <- as.formula(paste("age ~", paste(formula_parts, collapse = " + ")))
-    if (verbose) cat("Model formula: age ~", paste(formula_parts, collapse = " + "), "\n")
-  }
-
-  # Fit the ordinal GAM model
-  if (verbose) cat("Fitting GAM with cumulative logit link...\n")
-
-  tryCatch(
-    {
-      gam_model <- mgcv::gam(
-        formula = formula,
-        data = alk_data,
-        family = mgcv::ocat(R = length(age_levels)), # Ordered categorical with cumulative logit
-        weights = weights,
-        method = method,
-        select = select,
-        gamma = gamma
-      )
-    },
-    error = function(e) {
-      stop("Error fitting GAM model: ", e$message)
-    }
-  )
-
-  if (verbose) {
-    cat("Model fitted successfully!\n")
-    cat("Deviance explained:", round(summary(gam_model)$dev.expl * 100, 1), "%\n")
-  }
-
-  # Create prediction function
-  predict_function <- function(lengths, sex = NULL, ...) {
-    # Capture additional arguments for spatial/temporal variables
-    extra_args <- list(...)
-    
-    # Validate inputs
-    if (!is.numeric(lengths)) {
-      stop("lengths must be numeric")
-    }
-
-    if (by_sex && is.null(sex)) {
-      stop("sex must be provided when model was fitted with by_sex = TRUE")
-    }
-
-    if (!by_sex && !is.null(sex)) {
-      warning("sex provided but model was fitted with by_sex = FALSE. Ignoring sex.")
-      sex <- NULL
-    }
-
-    # Create prediction data
-    if (by_sex) {
-      if (length(sex) == 1) {
-        sex <- rep(sex, length(lengths))
-      } else if (length(sex) != length(lengths)) {
-        stop("sex must be either length 1 or same length as lengths")
-      }
-
-      # Check sex levels
-      if (!all(sex %in% sex_levels)) {
-        stop("sex values must be in: ", paste(sex_levels, collapse = ", "))
-      }
-
-      newdata <- data.frame(
-        length = lengths,
-        sex = factor(sex, levels = sex_levels)
-      )
-    } else {
-      newdata <- data.frame(length = lengths)
-    }
-    
-    # Add any additional variables from extra_args to newdata
-    if (length(extra_args) > 0) {
-      for (var_name in names(extra_args)) {
-        newdata[[var_name]] <- extra_args[[var_name]]
-      }
-    }
-
-    # Predict per-age probabilities, preferring type='response' if available
-    n_ages <- length(age_levels)
-    n_obs <- nrow(newdata)
-
-    if (n_ages == 1) {
-      prob_matrix <- matrix(1, nrow = n_obs, ncol = 1)
-      colnames(prob_matrix) <- paste0("age_", age_levels)
-      return(prob_matrix)
-    }
-
-    # Try response first (should be n_obs x n_ages probabilities)
-    prob_matrix <- NULL
-    resp_ok <- FALSE
-    resp_try <- try(stats::predict(gam_model, newdata = newdata, type = "response"), silent = TRUE)
-    if (!inherits(resp_try, "try-error") && !is.null(resp_try)) {
-      if (is.matrix(resp_try) && ncol(resp_try) %in% c(n_ages, n_ages - 1)) {
-        if (ncol(resp_try) == n_ages) {
-          prob_matrix <- resp_try
-          resp_ok <- TRUE
-        } else if (ncol(resp_try) == (n_ages - 1)) {
-          # Interpret as cumulative probs and convert to class probs
-          cumprob <- resp_try
-          prob_matrix <- matrix(NA_real_, nrow = n_obs, ncol = n_ages)
-          prob_matrix[, 1] <- cumprob[, 1]
-          if (n_ages > 2) {
-            for (j in 2:(n_ages - 1)) prob_matrix[, j] <- cumprob[, j] - cumprob[, j - 1]
-          }
-          prob_matrix[, n_ages] <- 1 - cumprob[, n_ages - 1]
-          resp_ok <- TRUE
-        }
-      } else if (is.vector(resp_try) && length(resp_try) == n_obs * n_ages) {
-        prob_matrix <- matrix(resp_try, nrow = n_obs, ncol = n_ages)
-        resp_ok <- TRUE
-      }
-    }
-
-    if (!resp_ok) {
-      # Fallback: get cumulative logits (K-1) and convert
-      pred_link <- stats::predict(gam_model, newdata = newdata, type = "link")
-
-      # Coerce to matrix (n_obs x (K-1)) robustly
-      if (is.matrix(pred_link)) {
-        if (nrow(pred_link) == n_obs && ncol(pred_link) == (n_ages - 1)) {
-          # as-is
-        } else if (nrow(pred_link) == (n_ages - 1) && ncol(pred_link) == n_obs) {
-          pred_link <- t(pred_link)
-        } else if (length(as.numeric(pred_link)) == n_obs * (n_ages - 1)) {
-          pred_link <- matrix(as.numeric(pred_link), nrow = n_obs, ncol = (n_ages - 1))
-        } else {
-          stop("Unexpected shape from predict(type='link') for ocat family")
-        }
-      } else {
-        v <- as.numeric(pred_link)
-        if (length(v) == n_obs * (n_ages - 1)) {
-          pred_link <- matrix(v, nrow = n_obs, ncol = (n_ages - 1))
-        } else {
-          stop("Could not coerce prediction to matrix: lengths and ages mismatch")
-        }
-      }
-
-      cumprob <- stats::plogis(pred_link) # n_obs x (K-1)
-      prob_matrix <- matrix(NA_real_, nrow = n_obs, ncol = n_ages)
-      prob_matrix[, 1] <- cumprob[, 1]
-      if (n_ages > 2) {
-        for (j in 2:(n_ages - 1)) prob_matrix[, j] <- cumprob[, j] - cumprob[, j - 1]
-      }
-      prob_matrix[, n_ages] <- 1 - cumprob[, n_ages - 1]
-    }
-
-    # Finalize: name, clip, normalize
-    colnames(prob_matrix) <- paste0("age_", age_levels)
-    prob_matrix[!is.finite(prob_matrix)] <- 0
-    prob_matrix[prob_matrix < 0] <- 0
-    rs <- rowSums(prob_matrix)
-    keep <- rs > 0 & is.finite(rs)
-    if (any(keep)) prob_matrix[keep, ] <- prob_matrix[keep, , drop = FALSE] / rs[keep]
-
-    return(prob_matrix)
-  }
-
-  # Create model summary
-  model_summary <- list(
-    deviance_explained = summary(gam_model)$dev.expl,
-    aic = AIC(gam_model),
-    n_observations = nrow(alk_data),
-    edf = sum(gam_model$edf),
-    smooth_terms = summary(gam_model)$s.table
-  )
-
-  if (verbose) {
-    cat("\nModel Summary:\n")
-    cat("Observations:", model_summary$n_observations, "\n")
-    cat("AIC:", round(model_summary$aic, 1), "\n")
-    cat("Effective degrees of freedom:", round(model_summary$edf, 1), "\n")
-  }
-
-  # Convert ages to numeric and ensure they don't exceed 20 for the tests
-  ages_numeric <- as.numeric(age_levels)
-  ages_numeric <- pmin(ages_numeric, 20) # Cap at 20 for test expectation
-
-  # Return results
-  result <- list(
-    model = gam_model,
-    predict_function = predict_function,
-    model_summary = model_summary, # renamed from 'summary' to 'model_summary' to match tests
-    deviance_explained = model_summary$deviance_explained * 100, # extract and convert to percentage
-    by_sex = by_sex,
-    ages = ages_numeric, # renamed from 'age_levels' to 'ages' to match tests
-    sex_levels = sex_levels,
-    additional_terms = additional_terms
-  )
-
-  class(result) <- "ordinal_alk"
-  return(result)
+                            select = TRUE, gamma = 1.4, method = "REML",
+                            weights = NULL, verbose = TRUE,
+                            k_length = NULL, k_year = NULL, plus_group = NULL) {
+  fit_age_alk_model(alk_data = alk_data, by_sex = by_sex, k = k,
+    additional_terms = additional_terms, select = select, gamma = gamma,
+    method = method, weights = weights, verbose = verbose,
+    k_length = k_length, k_year = k_year, model_type = "ordinal",
+    k_supplied = !missing(k), plus_group = plus_group)
 }
-
-#' Print method for ordinal_alk objects
+#' Print an ordinal age-at-length model
 #' @param x An ordinal_alk object
-#' @param ... Additional arguments (ignored)
+#' @param ... Additional arguments
 #' @export
 print.ordinal_alk <- function(x, ...) {
-  cat("Ordinal Age-at-Length Model (GAM)\n")
-  cat("==================================\n\n")
-
-  cat("Model specification:\n")
-  if (x$by_sex) {
-    cat("  Formula: age ~ s(length, by = sex) + sex\n")
-    cat("  Sex levels:", paste(x$sex_levels, collapse = ", "), "\n")
-  } else {
-    cat("  Formula: age ~ s(length)\n")
-  }
-  cat("  Age levels:", paste(x$ages, collapse = ", "), "\n")
-  cat("  Family: Ordered categorical (cumulative logit)\n\n")
-
-  cat("Model fit:\n")
-  cat("  Observations:", x$model_summary$n_observations, "\n")
-  cat("  Deviance explained:", round(x$deviance_explained, 1), "%\n")
-  cat("  AIC:", round(x$model_summary$aic, 1), "\n")
-  cat("  Effective df:", round(x$model_summary$edf, 1), "\n\n")
-
-  cat("Use predict_function(lengths, sex) to generate age probabilities\n")
+  cat("Ordinal age-at-length model (cumulative logit)\n")
+  print(stats::formula(x$model))
+  cat("Age categories:", paste(x$ages, collapse = ", "), "\n")
+  cat("Observations:", x$model_summary$n_observations, "\n")
+  cat("AIC:", round(x$model_summary$aic, 1), "\n")
+  cat("Effective degrees of freedom:", round(x$model_summary$edf, 1), "\n")
+  invisible(x)
 }

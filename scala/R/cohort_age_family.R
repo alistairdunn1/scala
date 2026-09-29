@@ -35,24 +35,27 @@ cohort_probabilities <- function(eta, cuts, upper, se = NULL) {
 
 # An extended family supplies derivatives through fourth order so that mgcv
 # estimates smoothness and cohort cut-points under the conditional likelihood.
-cohort_age_family <- function(n_class, upper) {
+cohort_age_family <- function(n_class, upper, censored = rep(FALSE, length(upper))) {
   if (n_class < 2L || anyNA(upper) || any(upper < 1L | upper > n_class)) {
     stop("At least two cohorts and a valid positive-age support are required.")
   }
   base <- mgcv::ocat(R = n_class)
   family <- base
   support <- as.integer(upper)
+  if (!is.logical(censored) || length(censored) != length(support) || anyNA(censored)) {
+    stop("Censoring indicators must match the observations.")
+  }
   check_support <- function(y, mu) {
     if (length(y) != length(support) || length(mu) != length(support) ||
         any(!is.finite(y)) || any(y != floor(y)) || any(y < 1 | y > support)) {
       stop("Cohort observations do not match their positive-age support.")
     }
   }
-  correction <- function(mu, theta) {
+  correction <- function(mu, theta, index = support) {
     cuts <- c(-1, -1 + cumsum(exp(theta)))
     t <- rep(Inf, length(mu))
-    use <- support < n_class
-    t[use] <- cuts[support[use]] - mu[use]
+    use <- index < n_class
+    t[use] <- cuts[index[use]] - mu[use]
     f <- stats::plogis(t)
     q <- stats::plogis(-t)
     list(log_mass = stats::plogis(t, log.p = TRUE), h1 = q,
@@ -69,8 +72,9 @@ cohort_age_family <- function(n_class, upper) {
     higher <- c(cuts, Inf)[y] - mu
     log_p <- stats::plogis(higher, log.p = TRUE) +
       stats::plogis(-lower, log.p = TRUE) + log(-expm1(lower - higher))
+    log_p[censored] <- correction(mu, theta, y)$log_mass[censored]
     result <- -2 * wt * (log_p - correction(mu, theta)$log_mass)
-    result[support == 1L] <- 0
+    result[support == 1L | (censored & y == support)] <- 0
     attr(result, "sign") <- sign((lower + higher) / 2)
     result
   }
@@ -81,16 +85,52 @@ cohort_age_family <- function(n_class, upper) {
     out <- base$Dd(y, mu, theta, wt, level)
     h <- correction(mu, theta)
     w <- 2 * wt
+    n_theta <- length(theta)
+    # Binary ocat fits have no free cut-points but require higher derivatives.
+    if (level > 0 && n_theta == 0L) {
+      f <- stats::plogis(-1 - mu)
+      q <- stats::plogis(mu + 1)
+      out$Dmu3 <- -w * f * q * (1 - 2 * f)
+      if (level > 1) out$Dmu4 <- w * f * q * (1 - 6 * f + 6 * f^2)
+    }
+    # A plus-group observation records C <= y, rather than an exact cohort.
+    if (any(censored)) {
+      numerator <- correction(mu, theta, y)
+      replace_rows <- function(name, value) {
+        if (is.matrix(value)) out[[name]][censored, ] <<- value[censored, , drop = FALSE]
+        else out[[name]][censored] <<- value[censored]
+      }
+      replace_rows("Dmu", w * numerator$h1)
+      replace_rows("Dmu2", -w * numerator$h2)
+      if (level > 0) replace_rows("Dmu3", w * numerator$h3)
+      if (level > 1) replace_rows("Dmu4", -w * numerator$h4)
+      if (level > 0 && n_theta > 0L) {
+        v <- outer(y, seq_len(n_theta), function(u, k) u > k & u < n_class)
+        v <- sweep(v, 2, exp(theta), `*`)
+        replace_rows("Dth", -w * numerator$h1 * v)
+        replace_rows("Dmuth", w * numerator$h2 * v)
+        replace_rows("Dmu2th", -w * numerator$h3 * v)
+        if (level > 1) {
+          replace_rows("Dmu3th", w * numerator$h4 * v)
+          column <- 0L
+          for (j in seq_len(n_theta)) for (k in j:n_theta) {
+            column <- column + 1L
+            product <- v[, j] * v[, k]
+            second <- if (j == k) v[, j] else rep(0, length(y))
+            out$Dth2[censored, column] <- (-w * (numerator$h2 * product + numerator$h1 * second))[censored]
+            out$Dmuth2[censored, column] <- (w * (numerator$h3 * product + numerator$h2 * second))[censored]
+            out$Dmu2th2[censored, column] <- (-w * (numerator$h4 * product + numerator$h3 * second))[censored]
+          }
+        }
+      }
+    }
     out$D <- family$dev.resids(y, mu, wt, theta)
     out$Dmu <- out$Dmu - w * h$h1
     out$Dmu2 <- out$Dmu2 + w * h$h2
     out$EDmu2 <- out$Dmu2
-    n_theta <- length(theta)
     if (level > 0 && n_theta == 0L) {
-      f <- stats::plogis(-1 - mu)
-      q <- stats::plogis(mu + 1)
-      out$Dmu3 <- -w * f * q * (1 - 2 * f) - w * h$h3
-      if (level > 1) out$Dmu4 <- w * f * q * (1 - 6 * f + 6 * f^2) + w * h$h4
+      out$Dmu3 <- out$Dmu3 - w * h$h3
+      if (level > 1) out$Dmu4 <- out$Dmu4 + w * h$h4
     }
     if (level > 0 && n_theta > 0L) {
       v <- outer(support, seq_len(n_theta), function(u, k) u > k & u < n_class)
@@ -116,8 +156,9 @@ cohort_age_family <- function(n_class, upper) {
     }
     # A single admissible cohort has probability one and contributes no information.
     for (name in names(out)) if (!is.null(out[[name]])) {
-      if (is.matrix(out[[name]])) out[[name]][support == 1L, ] <- 0
-      else out[[name]][support == 1L] <- 0
+      uninformative <- support == 1L | (censored & y == support)
+      if (is.matrix(out[[name]])) out[[name]][uninformative, ] <- 0
+      else out[[name]][uninformative] <- 0
     }
     out
   }
@@ -125,6 +166,7 @@ cohort_age_family <- function(n_class, upper) {
     sum(family$dev.resids(y, mu, wt, theta))
   }
   family$rd <- function(mu, wt, scale) {
+    if (any(censored)) stop("Random cohort responses require an explicit age-censoring design.")
     p <- cohort_probabilities(mu, base$getTheta(TRUE), support)
     vapply(seq_along(mu), function(i) sample.int(n_class, 1L, prob = p[i, ]), integer(1))
   }
@@ -136,6 +178,10 @@ cohort_age_family <- function(n_class, upper) {
     if (type == "working") return(object$residuals)
     p <- cohort_probabilities(object$linear.predictors, base$getTheta(TRUE), support)
     difference <- object$y - as.vector(p %*% seq_len(n_class))
+    if (any(censored)) {
+      cumulative <- t(apply(p, 1L, cumsum))
+      difference[censored] <- 1 - cumulative[cbind(which(censored), object$y[censored])]
+    }
     if (type == "response") return(difference)
     sign(difference) * sqrt(pmax(0, family$dev.resids(object$y,
       object$linear.predictors, object$prior.weights)))
@@ -171,6 +217,9 @@ predict.cohort_gam <- function(object, newdata, type = "link", se.fit = FALSE, .
   years <- newdata$year
   if (!is.numeric(years) || any(!is.finite(years)) || any(years != floor(years)) || !length(years)) {
     stop("Response predictions require finite integer sampling years.")
+  }
+  if (!is.null(object$plus_group) && any(years < object$minimum_prediction_year)) {
+    stop("Plus-group cohort predictions require years at or after the first training year.")
   }
   upper <- findInterval(years - object$age_offset - 1, object$cohorts)
   if (any(upper < 1L)) stop("No modelled cohort has a positive age in a requested sampling year.")

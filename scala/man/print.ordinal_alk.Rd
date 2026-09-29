@@ -2,15 +2,15 @@
 % Please edit documentation in R/fit_ordinal_alk.R
 \name{print.ordinal_alk}
 \alias{print.ordinal_alk}
-\title{Print method for ordinal_alk objects}
+\title{Print an ordinal age-at-length model}
 \usage{
 \method{print}{ordinal_alk}(x, ...)
 }
 \arguments{
 \item{x}{An ordinal_alk object}
 
-\item{...}{Additional arguments (ignored)}
+\item{...}{Additional arguments}
 }
 \description{
-Print method for ordinal_alk objects
+Print an ordinal age-at-length model
 }

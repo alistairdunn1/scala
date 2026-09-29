@@ -2,7 +2,7 @@
 % Please edit documentation in R/fit_ordinal_alk.R
 \name{fit_ordinal_alk}
 \alias{fit_ordinal_alk}
-\title{Fit Ordinal Age-at-Length Model using GAM}
+\title{Fit an ordinal age-at-length model}
 \usage{
 fit_ordinal_alk(
   alk_data,
@@ -13,99 +13,115 @@ fit_ordinal_alk(
   gamma = 1.4,
   method = "REML",
   weights = NULL,
-  verbose = TRUE
+  verbose = TRUE,
+  k_length = NULL,
+  k_year = NULL,
+  plus_group = NULL
 )
 }
 \arguments{
-\item{alk_data}{Age-length key data frame or list (from create_alk() output) with columns:
-'age', 'length', and optionally 'sex'. Each row represents one aged fish.}
+\item{alk_data}{Data frame with one row per aged fish, positive integer
+\code{age}, finite positive \code{length}, and \code{sex} when
+\code{by_sex = TRUE}; integer \code{year} and other covariates when included
+in the model, or a named list of sex-specific data frames}
 
-\item{by_sex}{Logical, whether to fit sex-specific smooth terms (default TRUE)}
+\item{by_sex}{Logical indicating sex-specific smooths and a sex main effect}
 
-\item{k}{Basis dimension for smooth terms (default -1 for automatic selection)}
+\item{k}{Alias for \code{k_length}; both must agree if supplied together}
 
-\item{additional_terms}{Character vector of additional GAM formula terms to include in the model (default NULL).
-Each element should be a valid mgcv smooth term as a character string (e.g., "te(lat, long)", "s(day_of_year, bs = 'cc')").
-When by_sex = TRUE, these terms will automatically be fitted with 'by = sex' interactions.}
+\item{additional_terms}{Character vector of additional GAM terms; smooth terms
+receive \code{by = sex} when \code{by_sex = TRUE} unless a by variable is
+already specified; parametric terms are used as supplied}
 
-\item{select}{Logical, whether to add an extra penalty to each smooth term allowing
-terms to be penalized to zero (variable selection). Recommended for models with
-multiple smooth terms (default TRUE). See \code{\link[mgcv]{gam}} for details.}
+\item{select}{Logical indicating extra penalties on smooth null spaces,
+allowing complete smooth terms to shrink towards zero}
 
-\item{gamma}{Numeric multiplier for the effective degrees of freedom in the smoothing
-parameter selection criterion. Values > 1 (e.g., 1.4) produce smoother models and
-help guard against overfitting (default 1.4, following Wood 2006 recommendation).}
+\item{gamma}{Multiplier of effective degrees of freedom in the smoothing
+criterion, with larger values favouring smoother fits}
 
-\item{method}{Smoothing parameter estimation method for mgcv (default "REML")}
+\item{method}{Smoothing parameter estimation method, either \code{"REML"}
+or \code{"ML"}}
 
-\item{weights}{Optional weights for observations (default NULL)}
+\item{weights}{Optional finite non-negative observation likelihood weights,
+one per input row, with a positive total; \code{NULL} gives equal weights}
 
-\item{verbose}{Logical, whether to print model fitting details (default TRUE)}
+\item{verbose}{Logical indicating whether fitting details are printed}
+
+\item{k_length}{Integer basis dimension for the length smooth; non-positive
+values select the automatic rule described in Details; \code{NULL} uses \code{k}}
+
+\item{k_year}{Integer basis dimension for the year smooth; non-positive values
+select the automatic rule described in Details; \code{NULL} omits the
+built-in year smooth}
+
+\item{plus_group}{Optional positive integer defining an inclusive upper-age
+category; \code{NULL} (the default) applies no plus group}
 }
 \value{
-A list containing:
-  \itemize{
-    \item \code{model}: The fitted mgcv::gam model object
-    \item \code{predict_function}: Function that takes lengths (and optionally sex) and returns age probabilities
-    \item \code{summary}: Model summary including deviance explained and significance tests
-    \item \code{by_sex}: Logical indicating whether sex-specific terms were used
-    \item \code{age_levels}: Vector of age levels in the model
-    \item \code{sex_levels}: Vector of sex levels (if applicable)
-  }
+An ordinal_alk list containing model, predict_function, predict_age,
+  model_summary, deviance_explained (percentage), ages, age_levels, sex_levels,
+  by_sex, additional_terms, k_length, k_year, year_range, training_years,
+  age_support, response_type and plus_group
 }
 \description{
-Experimental: Fits an ordinal age-at-length model using cumulative logit regression with smooth terms
-  for length, optionally by sex. Returns a prediction function that can be used to predict
-  age probabilities for given lengths.
+Fits a cumulative-logit model for positive integer age categories,
+  with smooth effects of length and optionally year, sex and other covariates.
 }
 \details{
-The function fits an ordinal regression model using the cumulative logit link function,
-which is appropriate for ordered age categories that typically increase with length.
-The model structure is:
+The model estimates ordered age categories directly. Its response is age,
+whereas fit_cohort_alk estimates cohort and converts cohort to age using the
+sampling year. Both use a cumulative-logit link, sex-specific smooths when
+requested, and the same meanings for select, gamma, method and weights.
+Basis dimensions limit smooth complexity; smoothing parameters are estimated.
+The automatic length basis dimension is min(10, max(3, floor(n_length / 3))),
+where n_length is the number of distinct lengths. The automatic year dimension
+is min(n_year - 1, 2) for at most three distinct years, and
+min(10, max(3, floor(n_year / 2))) otherwise. The data must support the
+requested smooths; mgcv may increase dimensions below its minimum.
 
-\strong{Without sex effects:}
-\code{age ~ s(length)}
+Supplying k_year adds a year smooth. With by_sex = TRUE the resulting predictor
+is age ~ s(length, by = sex) + s(year, by = sex) + sex, plus additional terms.
+A year smooth is optional for direct-age models. For a matched cohort comparison,
+specify the same k_length, k_year, additional_terms and fitting settings.
+fit_multinomial_alk uses the same age categories and prediction interfaces,
+with age-specific log odds rather than shared ordinal cut-points.
 
-\strong{With sex effects:}
-\code{age ~ s(length, by = sex) + sex}
+Ages must be positive integers and at least two distinct categories must remain
+after grouping. Age categories are the distinct observed ages after grouping.
+Missing intermediate ages are not estimated categories. The model assigns
+probability only to these positive ages, in fitting and prediction.
+Missing fitting covariates, failed convergence and invalid predictions stop
+with an error. Observation weights are likelihood weights, not catch totals.
 
-The cumulative logit model estimates the probability that age <= k for each age level k,
-which naturally respects the ordinal nature of age data.
+With \code{plus_group = P}, ages at or above P are pooled as P before fitting.
+The final category represents P and older, and its prediction is their combined
+probability. Choose P for each analysis; no threshold is selected automatically.
+For example, \code{plus_group = 50} represents 50+, but 50 is not a default.
+The model does not estimate the distribution within the plus group. Treating
+its label as an exact age yields a mean of capped ages, not the mean actual age.
 
-The returned prediction function can be used directly with length composition data
-to create age-length keys for use in \code{\link{calculate_age_compositions}}.
+predict_function(lengths, sex = NULL, ...) returns one column per observed age,
+named age_N. Supply year and other fitted covariates through named arguments.
+predict_age(lengths, sampling_years = NULL, sex = NULL, ...) returns columns
+age_1 through the maximum observed age, or through P when a plus group is
+specified, with zero for unobserved categories.
+A scalar sampling year is recycled; other prediction covariates must have
+length one or match lengths. Sampling years are required when year is a fitted
+covariate. Predictions outside sampled years retain the fitted model's
+extrapolation assumptions. No age_offset applies to a direct-age response.
+
+Aged samples selected by length support conditional age probabilities when
+sampling within modelled covariate strata is independent of age. Catch age
+compositions require representative length data and appropriate catch expansion.
 }
 \examples{
 \dontrun{
-# Generate test age-length data
-age_data <- data.frame(
-  age = rep(1:8, each = 50),
-  length = c(
-    rnorm(50, 20, 2), rnorm(50, 25, 2), rnorm(50, 30, 2),
-    rnorm(50, 35, 2), rnorm(50, 40, 2), rnorm(50, 45, 2),
-    rnorm(50, 50, 2), rnorm(50, 55, 2)
-  ),
-  sex = rep(c("male", "female"), 200)
-)
-
-# Fit ordinal age-length model
-ordinal_model <- fit_ordinal_alk(age_data, by_sex = TRUE, verbose = TRUE)
-
-# Use the prediction function
-test_lengths <- 20:60
-test_sex <- rep(c("male", "female"), each = length(test_lengths))
-
-# Predict age probabilities
-age_probs <- ordinal_model$predict_function(test_lengths, test_sex)
-
-# Create age-length key from predictions
-alk_predicted <- data.frame(
-  length = rep(test_lengths, 2),
-  sex = test_sex,
-  age_probs
+direct <- fit_ordinal_alk(aged_fish, k_length = 10, k_year = 10,
+  additional_terms = "te(long, lat, k = c(6, 6))")
+probabilities <- direct$predict_age(c(100, 120), 2025, "female",
+  long = c(180, 181), lat = c(-70, -71))
 }
-
 }
 \seealso{
-\code{\link{create_alk}}, \code{\link{calculate_age_compositions}}, \code{\link[mgcv]{gam}}
+\code{\link{fit_cohort_alk}}, \code{\link{fit_multinomial_alk}}, \code{\link[mgcv]{gam}}
 }

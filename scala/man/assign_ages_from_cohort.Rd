@@ -2,7 +2,7 @@
 % Please edit documentation in R/assign_ages_from_cohort.R
 \name{assign_ages_from_cohort}
 \alias{assign_ages_from_cohort}
-\title{Assign Ages to Fish Data Using Cohort Model}
+\title{Assign ages using a cohort model}
 \usage{
 assign_ages_from_cohort(
   fish_data,
@@ -16,104 +16,38 @@ assign_ages_from_cohort(
 )
 }
 \arguments{
-\item{fish_data}{Data frame with columns: length, year, and optionally 'sex'.
-Additional columns (e.g., stratum, sample_id, counts) will be preserved.}
+\item{fish_data}{Data frame with one row per fish and the prediction covariates
+required by the model; other columns and row order are retained}
 
-\item{cohort_model}{A fitted cohort model object from \code{\link{fit_cohort_alk}}}
+\item{cohort_model}{Fitted model from \code{\link{fit_cohort_alk}}}
 
-\item{method}{Character, method for age assignment:
-\itemize{
-  \item \code{"random"}: Randomly sample age based on probabilities (default)
-  \item \code{"mode"}: Assign the most probable age
-  \item \code{"expected"}: Assign the expected age (weighted mean of probabilities)
-}}
+\item{method}{Assignment rule: \code{"random"} samples an age from its
+probabilities, \code{"mode"} selects the most probable age, and
+\code{"expected"} rounds the probability-weighted mean age}
 
-\item{predict_missing}{Logical, whether to predict ages for years not present in the
-cohort model's training data (default FALSE). When TRUE, the cohort model will
-predict ages for all years in \code{fish_data}, including gap years that had
-length observations but no age data. When FALSE, only fish from years present
-in the training data will receive predicted ages; fish from other years will
-be assigned NA.}
+\item{predict_missing}{Logical indicating whether a year-dependent model may
+predict years absent from its training data; FALSE assigns NA in those years}
 
-\item{seed}{Integer, random seed for reproducible sampling when method = "random" (default NULL)}
+\item{seed}{Optional non-negative integer random seed for random assignment}
 
-\item{keep_probabilities}{Logical, whether to keep all age probabilities in output (default FALSE)}
+\item{keep_probabilities}{Logical indicating whether to include age_prob_N columns}
 
-\item{verbose}{Logical, whether to print progress messages (default TRUE)}
+\item{verbose}{Logical indicating whether assignment counts are printed}
 
-\item{...}{Additional named arguments passed through to the cohort model's \code{predict_age} function.
-These are required when the model was fitted with \code{additional_terms} (e.g., spatial or temporal covariates).
-The values should be vectors of the same length as \code{nrow(fish_data)},
-or alternatively the corresponding columns can be included directly in \code{fish_data}.}
+\item{...}{Additional named prediction covariates, each of length one or
+nrow(fish_data); these take precedence over corresponding fish_data columns}
 }
 \value{
-Data frame with original columns plus:
-  \itemize{
-    \item \code{age}: Assigned age for each observation
-    \item \code{age_prob_*}: Age probability columns (only if keep_probabilities = TRUE)
-  }
+Data frame returned by \code{\link{assign_ages}}
 }
 \description{
-Assigns ages to individual fish observations using predictions from a fitted cohort model.
-  For each fish, age probabilities are calculated based on length, sampling year, and sex,
-  and a single age is assigned either deterministically (most probable) or stochastically (sampled).
+Assigns ages through the shared \code{\link{assign_ages}}
+  implementation, with model-class validation.
 }
 \details{
-This function uses the \code{predict_age} function from a fitted cohort model to obtain
-age probability distributions for each fish observation. Ages are then assigned according
-to the specified method:
-Probabilities are conditional on positive integer ages in the sampling year and
-sum to one for each predicted fish. Invalid probability distributions stop the
-calculation with an informative error.
-
-**Mode method**: Assigns the age with highest probability (most likely age)
-
-**Expected method**: Assigns the expected value (mean) of the age distribution.
-This may result in non-integer ages which are rounded to the nearest integer.
-
-**Random method**: Stochastically samples an age from the probability distribution.
-Use this for propagating uncertainty through subsequent analyses.
-
-The function handles sex-specific models automatically. If the cohort model was fitted
-with \code{by_sex = TRUE}, sex information must be present in fish_data.
-
-If the model was fitted with \code{additional_terms} (e.g., \code{"te(lat, long)"}),
-the corresponding variables must be supplied either as columns in \code{fish_data}
-or as named arguments via \code{...}.
-}
-\examples{
-\dontrun{
-# Fit cohort model on aged subsample
-aged_data <- data.frame(
-  age = c(2, 3, 3, 4, 5),
-  length = c(25, 30, 32, 38, 42),
-  year = c(2020, 2020, 2021, 2021, 2022),
-  sex = c("male", "female", "male", "female", "male")
-)
-cohort_model <- fit_cohort_alk(aged_data, by_sex = TRUE)
-
-# Assign ages to full length dataset
-length_data <- data.frame(
-  length = c(26, 31, 29, 35, 40),
-  year = c(2020, 2021, 2020, 2021, 2022),
-  sex = c("male", "male", "female", "female", "male"),
-  stratum = c("A", "A", "B", "B", "A"),
-  sample_id = c(1, 1, 2, 2, 3)
-)
-
-# Assign ages using most probable age
-age_assigned <- assign_ages_from_cohort(length_data, cohort_model, method = "mode")
-
-# Assign ages stochastically for uncertainty propagation
-age_assigned_random <- assign_ages_from_cohort(
-  length_data,
-  cohort_model,
-  method = "random",
-  seed = 123
-)
-}
-
+Assignment rules, probability validation, covariate handling and
+  uncertainty interpretation follow \code{\link{assign_ages}}.
 }
 \seealso{
-\code{\link{fit_cohort_alk}}, \code{\link{calculate_age_compositions_from_cohort}}
+\code{\link{assign_ages}}, \code{\link{fit_cohort_alk}}
 }
