@@ -61,11 +61,7 @@ get_summary <- function(x,
                         length_range = NULL) {
   # Validate inputs
   if (!inherits(x, "length_composition")) {
-    if (inherits(x, "age_composition")) {
-      stop("Input must be an object of class 'length_composition'")
-    } else {
-      stop("Object must be a length_composition or age_composition")
-    }
+    stop("Input must be an object of class 'length_composition'")
   }
 
   # Validate inputs
@@ -81,8 +77,9 @@ get_summary <- function(x,
     }
   }
 
-  # Check for bootstrap requirements
-  if (by_stratum == FALSE && type == "composition" && is.null(x$bootstraps)) {
+  # Bootstrap summaries are available without retaining individual replicates.
+  has_bootstraps <- isTRUE(x$n_bootstraps > 0)
+  if (by_stratum == FALSE && type == "composition" && !has_bootstraps) {
     stop("No CV data available. Bootstrap results are required to calculate CVs.")
   }
 
@@ -104,7 +101,7 @@ get_summary <- function(x,
   if (!is.null(x$summary_stats) && !is.null(x$summary_stats$total_summary)) {
     if (!is.null(x$summary_stats$total_summary$n_fish)) {
       total_fish_vector <- x$summary_stats$total_summary$n_fish
-      summary_result$total_fish <- sum(total_fish_vector)
+      summary_result$total_fish <- unname(total_fish_vector["total"])
       summary_result$fish_by_sex <- total_fish_vector
     } else {
       summary_result$total_fish <- 0
@@ -131,7 +128,7 @@ get_summary <- function(x,
       stratum <- x$strata_names[i]
       if (stratum %in% names(x$summary_stats$stratum_summary) &&
         !is.null(x$summary_stats$stratum_summary[[stratum]]$n_fish)) {
-        summary_result$fish_by_stratum[i] <- sum(x$summary_stats$stratum_summary[[stratum]]$n_fish)
+        summary_result$fish_by_stratum[i] <- x$summary_stats$stratum_summary[[stratum]]$n_fish["total"]
       } else {
         summary_result$fish_by_stratum[i] <- 0
       }
@@ -139,11 +136,10 @@ get_summary <- function(x,
   }
 
   # Add bootstrap information
-  has_bootstraps <- !is.null(x$bootstraps) && length(x$bootstraps) > 0
   summary_result$has_bootstraps <- has_bootstraps
 
   if (has_bootstraps) {
-    summary_result$n_bootstraps <- length(x$bootstraps)
+    summary_result$n_bootstraps <- x$n_bootstraps
 
     # Get CV range if available
     if (!is.null(x$lc_cvs)) {

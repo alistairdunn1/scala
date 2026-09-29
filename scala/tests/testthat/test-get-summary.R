@@ -3,7 +3,7 @@ test_that("get_summary for length_composition objects", {
   test_data <- generate_test_data()
   lw_params <- get_default_lw_params()
 
-  # We need to use bootstraps to match the new implementation requirements
+  # Include bootstrap uncertainty without retaining individual replicates.
   lc_result <- calculate_length_compositions(
     fish_data = test_data$fish_data,
     strata_data = test_data$strata_data,
@@ -55,12 +55,18 @@ test_that("get_summary with bootstrap data", {
   summary_result <- get_summary(lc_result)
 
   # Check bootstrap data
+  expect_null(lc_result$bootstraps)
+  expect_null(lc_result$full_lc_bootstraps)
   expect_true(summary_result$has_bootstraps)
   expect_equal(summary_result$n_bootstraps, 10)
 
   # Should have additional bootstrap-related fields
   bootstrap_fields <- c("n_bootstraps", "cv_range", "ci_coverage")
   expect_true(all(bootstrap_fields %in% names(summary_result)))
+
+  lc_result$n_bootstraps <- 0
+  expect_error(get_summary(lc_result), "No CV data available", fixed = TRUE)
+  expect_false(get_summary(lc_result, by_stratum = TRUE)$has_bootstraps)
 })
 
 test_that("get_summary parameter validation", {
@@ -90,6 +96,15 @@ test_that("get_summary detailed statistics", {
 
   # Test that summary includes reasonable values
   expect_true(summary_result$total_fish > 0)
+  expect_equal(
+    summary_result$total_fish,
+    sum(test_data$fish_data[, c("male", "female", "unsexed")])
+  )
+  expected_by_stratum <- vapply(lc_result$strata_names, function(stratum_name) {
+    fish <- test_data$fish_data[test_data$fish_data$stratum == stratum_name, ]
+    sum(fish[, c("male", "female", "unsexed")])
+  }, numeric(1))
+  expect_equal(summary_result$fish_by_stratum, expected_by_stratum)
   expect_equal(length(summary_result$fish_by_stratum), summary_result$n_strata)
   expect_true(all(names(summary_result$fish_by_sex) %in% c("male", "female", "unsexed", "total")))
 
