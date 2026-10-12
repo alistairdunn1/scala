@@ -134,3 +134,16 @@ test_that("bam cohort penalties agree with the dense formulation", {
   expect_equal(a$predict_age(rep(100, 4), 2010:2013),
     b$predict_age(rep(100, 4), 2010:2013), tolerance = 1e-4)
 })
+
+test_that("continuation wrappers validate the model and delegate to shared functions", {
+  d <- data.frame(age = rep(c(2, 5, 9), c(20, 30, 50)), length = 100)
+  fit <- fit_continuation_alk(d, by_sex = FALSE, k_length = NULL, verbose = FALSE)
+  fish <- data.frame(length = c(90, 100, 110))
+  expect_identical(
+    assign_ages_from_continuation(fish, fit, seed = 3, keep_probabilities = TRUE, verbose = FALSE),
+    assign_ages(fish, fit, seed = 3, keep_probabilities = TRUE, verbose = FALSE))
+  wrong <- structure(list(), class = "ordinal_alk")
+  expect_error(assign_ages_from_continuation(fish, wrong), "continuation_alk")
+  expect_error(calculate_age_compositions_from_continuation(fish, NULL, c(1, 9),
+    NULL, NULL, NULL, continuation_model = wrong), "continuation_alk")
+})

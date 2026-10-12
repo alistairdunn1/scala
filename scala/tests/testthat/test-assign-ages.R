@@ -11,7 +11,8 @@ test_that("assignment wrappers use the shared rules and retain fish records", {
   fish <- data.frame(length = c(80, 100, 120), year = 2015, sex = c("Male", "Female", "Male"),
     sample_id = c("b", "a", "c"), age = 99)
   wrappers <- list(cohort_alk = assign_ages_from_cohort, ordinal_alk = assign_ages_from_ordinal,
-    multinomial_alk = assign_ages_from_multinomial)
+    multinomial_alk = assign_ages_from_multinomial,
+    continuation_alk = assign_ages_from_continuation)
   for (class in names(wrappers)) {
     model <- assignment_model(class, 2015, 7)
     for (method in c("random", "mode", "expected")) {
@@ -29,6 +30,7 @@ test_that("assignment wrappers use the shared rules and retain fish records", {
   expect_null(attr(assign_ages(fish, assignment_model(), verbose = FALSE), "plus_group"))
   expect_error(assign_ages_from_ordinal(fish, assignment_model("multinomial_alk")), "ordinal_alk")
   expect_error(assign_ages_from_multinomial(fish, assignment_model()), "multinomial_alk")
+  expect_error(assign_ages_from_continuation(fish, assignment_model()), "continuation_alk")
 })
 
 test_that("year rules distinguish year-dependent and year-independent models", {

@@ -125,22 +125,20 @@ attenuate even when the broad age-length or cohort-trajectory shape appears
 reasonable. Increasing basis dimensions or relaxing smoothing does not remove
 the shared-threshold restriction.
 
-In a conditional Antarctic Toothfish simulation with cohort-model-generated
-truth, the fitted ordinal age specification substantially attenuated imposed
-strong and weak cohort contrasts. This is evidence against that specification
-for cohort-strength recovery, not a demonstration that all ordinal models fail.
-Convergence and a plausible mean age-length curve do not establish suitability
-for catch-at-age estimation. Evaluate multinomial age models, continuation-ratio
-models with age-specific temporal effects, or cohort formulations against the
-intended changes in age composition before selecting a model.
+In a simulation with cohort-model-generated truth, the fitted ordinal age
+specification substantially attenuated imposed strong and weak cohort contrasts.
+This is evidence against this specification for cohort-strength recovery
 }
 
 \examples{
 \dontrun{
-direct <- fit_ordinal_alk(aged_fish, k_length = 10, k_year = 10,
-  additional_terms = "te(long, lat, k = c(6, 6))")
+direct <- fit_ordinal_alk(aged_fish,
+  k_length = 10, k_year = 10,
+  additional_terms = "te(long, lat, k = c(6, 6))"
+)
 probabilities <- direct$predict_age(c(100, 120), 2025, "female",
-  long = c(180, 181), lat = c(-70, -71))
+  long = c(180, 181), lat = c(-70, -71)
+)
 }
 }
 \seealso{

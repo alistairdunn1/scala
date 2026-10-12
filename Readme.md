@@ -23,10 +23,17 @@ features may be added.**
 - [Key Concepts](#key-concepts)
 - [Requirements](#requirements)
 - [Available Functions](#available-functions)
-- [Cohort-Based Age Composition
-  Workflow](#cohort-based-age-composition-workflow)
-- [Otolith Weight-Based Age Composition
-  Workflow](#otolith-weight-based-age-composition-workflow)
+- [Model-Based Age Composition
+  Frameworks](#model-based-age-composition-frameworks)
+  - [Cohort-Based Age Composition
+    Workflow](#cohort-based-age-composition-workflow)
+  - [Ordinal Age Composition Workflow](#ordinal-age-composition-workflow)
+  - [Multinomial Age Composition
+    Workflow](#multinomial-age-composition-workflow)
+  - [Continuation-Ratio Age Composition
+    Workflow](#continuation-ratio-age-composition-workflow)
+  - [Otolith Weight-Based Age Composition
+    Workflow](#otolith-weight-based-age-composition-workflow)
 - [Length Measurement Bias Correction](#length-measurement-bias-correction)
 - [Creating Complete Age-Length Keys](#creating-complete-age-length-keys)
 - [Input Data Format](#input-data-format)
@@ -62,10 +69,13 @@ install.packages(c("roxygen2", "devtools"))
 
 # Build and install the package
 devtools::install_github("alistairdunn1/scala", subdir = "scala")
+```
 
-# Or using R CMD (from command line)
+Or, from the command line in the repository root:
+
+```bash
 R CMD build scala
-R CMD INSTALL scala_0.1.tar.gz
+R CMD INSTALL scala_*.tar.gz
 ```
 
 #### Quick Build (Windows)
@@ -205,61 +215,18 @@ sampling data by:
 6. **Age composition conversion**: Converting length compositions to age
   compositions using complete age-length keys with streamlined workflow and
   clear warnings for incomplete data
-7. **Cohort-based age assignment**: Direct age assignment to individual fish
-  using cohort models for multi-year datasets, followed by scaled age
-  composition calculations
-8. **Otolith weight-based age assignment**: Direct age assignment using otolith
-  weight as a predictor, providing an alternative pathway when otolith weights
-  are available as a continuous proxy for age
-
-## Ordinal age-model suitability
-
-The shared-threshold ordinal age model is unlikely to be useful for recovering
-changing cohort-strength patterns in catch-at-age compositions. It models age
-through common cumulative-logit thresholds; covariates shift a common latent
-predictor rather than providing independent age-specific responses. A strong or
-weak cohort moves through successive ages over time, which this structure can
-attenuate even when the broad age-length or cohort-trajectory shape appears
-reasonable. Increasing basis dimensions or relaxing smoothing does not remove
-the shared-threshold restriction.
-
-In a simulation with cohort-model-generated truth, the fitted ordinal age
-specification substantially attenuated imposed strong and weak cohort contrasts.
-This is evidence against this specification for cohort-strength recovery.
-
-## Continuation-ratio age model
-
-`fit_continuation_alk()` fits age-specific conditional logits with optional
-sex-specific length and year smooths. `cohort_rw = TRUE` instead fits age-year
-deviations with random-walk increments along cohorts and penalised initial
-deviations. This allows changing conditional cohort contributions without
-imposing shared age thresholds.
-
-For sparse age-sex groups, `age_pooling = TRUE` pools length and year smooths
-across neighbouring age steps while retaining separate surfaces for males and
-females. The default `sex_pooling = TRUE` uses unrestricted age intercepts with
-penalised sex deviations. Setting `sex_pooling = FALSE` instead uses separate
-smooth age intercept baselines and penalised age deviations within each sex,
-avoiding pooling intercepts between sexes. These are explicit alternative
-assumptions, not automatic remedies for failed fits. Missing observed ages
-retain zero probability. Inspect older-age predictions separately by sex,
-particularly where asymptotic lengths differ.
-
-```r
-fit <- scala::fit_continuation_alk(
-  aged_fish, by_sex = TRUE, k_length = 5, cohort_rw = TRUE
-)
-assigned <- scala::assign_ages(length_data, fit, seed = 7)
-```
-
-Use `k_year` for age-specific smooth year effects, or `cohort_rw` for
-cohort-following random effects; they are alternative temporal specifications.
-Random-walk predictions are restricted to the fitted year range. The default
-backend uses a dense expanded binomial GAM; `engine = "bam"` uses discretised
-covariates and factor random effects for larger datasets. Both require resources
-appropriate to the number of age-year cells. Random assignment does not
-propagate fitted-parameter uncertainty. See the function documentation for
-support requirements and likelihood details.
+7. **Model-based age assignment**: Direct age assignment to individual fish
+  from fitted age-probability models, followed by scaled age composition
+  calculations. Five frameworks are provided (see [Model-Based Age Composition
+  Frameworks](#model-based-age-composition-frameworks)):
+   - **Cohort** (`fit_cohort_alk()`): cumulative logit on year class, for
+     multi-year datasets
+   - **Ordinal** (`fit_ordinal_alk()`): cumulative logit on age
+   - **Multinomial** (`fit_multinomial_alk()`): age-specific log odds
+   - **Continuation ratio** (`fit_continuation_alk()`): age-specific
+     conditional logits, with optional cohort random walks
+   - **Otolith weight** (`fit_weight_age()`): cumulative logit on age using
+     otolith weight as the predictor
 
 ## Key Concepts
 
@@ -298,9 +265,9 @@ The package supports two scaling approaches:
 
 - R (version 4.0 or higher)
 - Required packages (per DESCRIPTION): `ggplot2`, `rlang`, `dplyr`, `stats`,
-  `zoo`,`mgcv`
+  `zoo`, `mgcv`
 - Suggested packages: `tidyr`, `RColorBrewer`, `viridis`, `patchwork`,
-  `plotly`,`gridExtra`, `rmarkdown`, `testthat`
+  `plotly`, `gridExtra`, `rmarkdown`, `testthat`
 - Memory: Sufficient RAM for bootstrap operations (depends on data size and
   bootstrap iterations)
 - Storage: Minimal disk space required (package size ~1MB)
@@ -348,15 +315,21 @@ The package provides the following main functions:
 - **`fit_multinomial_alk()`**: Fit positive-age probabilities with
   category-specific smooths for length, year, sex and additional covariates,
   using multinomial log odds
+- **`fit_continuation_alk()`**: Fit a continuation-ratio model of
+  age-specific conditional logits `P(A = a | A >= a)`, with optional
+  age-specific year smooths, cohort-following random walks, and pooling of
+  smooths across age steps
 - **`fit_weight_age()`**: Fit an ordinal GAM (cumulative logit)
   age-at-otolith-weight model (optionally by sex). Returns a prediction function
   for age probabilities from otolith weight; provides an alternative or
   complement to length-based age assignment when otolith weights are available
 - **`assign_ages()`**: Shared random, modal or rounded-expected assignment for
-  cohort, ordinal, multinomial and otolith-weight models, and traditional
+  cohort, ordinal, multinomial, continuation-ratio and otolith-weight models,
+  and traditional
   age-length keys
 - **`assign_ages_from_cohort()`**, **`assign_ages_from_ordinal()`**,
-  **`assign_ages_from_multinomial()`**, **`assign_ages_from_weight()`**:
+  **`assign_ages_from_multinomial()`**, **`assign_ages_from_continuation()`**,
+  **`assign_ages_from_weight()`**:
   Model-specific wrappers that validate the model class and delegate to
   `assign_ages()`
 - **`calculate_age_compositions_from_model()`**: Shared composition and
@@ -364,7 +337,8 @@ The package provides the following main functions:
   probabilities
 - **`calculate_age_compositions_from_cohort()`**,
   **`calculate_age_compositions_from_ordinal()`**,
-  **`calculate_age_compositions_from_multinomial()`**: Model-specific wrappers
+  **`calculate_age_compositions_from_multinomial()`**,
+  **`calculate_age_compositions_from_continuation()`**: Model-specific wrappers
   around the shared composition workflow
 - **`calculate_age_compositions_from_weight()`**: Otolith-weight composition
   workflow, using shared age assignment through its weight-model wrapper
@@ -393,7 +367,7 @@ The package provides the following main functions:
 - **`adjust_age_length_key_bias()`**: Adjust age-length key proportions to
   account for known length measurement bias patterns
 - **`compare_length_distributions()`**: Create side-by-side comparison plots of
-  originalvs corrected length distributions
+  original vs corrected length distributions
 
 ### Test Data Generation
 
@@ -421,12 +395,12 @@ The package provides the following main functions:
 - **`plot.age_composition()`**: Visualise age compositions with uncertainty
   ribbons using **identical interface** to length plotting
 - **`plot_alk()`**: Visualise age-length keys as heatmaps or bubble plots, with
-  optionaly-axis rug showing length distribution
+  optional y-axis rug showing length distribution
 - **`plot_length_composition_comparison()`**: Create multi-panel comparison
   plots for multiple length composition results
 - **`plot_sample_size_distribution()`**: Create stacked histograms showing
   sample size distributions by strata, with samples categorised by adequacy
-  (non-representativesmall, representative small, adequate)
+  (non-representative small, representative small, adequate)
 
 ### Utility Functions
 
@@ -442,7 +416,7 @@ The plotting system includes:
 - **Faceted layouts** for multi-stratum, multi-sex visualisation
 - **Bootstrap uncertainty** visualisation as shaded confidence regions
 - **Flexible binning** for both length (`length_bin_size`) and age
-  (`age_bin_size`)data aggregation
+  (`age_bin_size`) data aggregation
 - **Length binning** for aggregated visualisation at coarser scales
 - **Sex category filtering** with optional inclusion of unsexed fish
 
@@ -498,7 +472,7 @@ compositions:
   composition calculations, including optional ALK bootstrapping to account for
   otolith sampling uncertainty
 - **Comprehensive visualisation**: Plots with uncertainty ribbons and
-  multi-panellayouts
+  multi-panel layouts
 
 **Bootstrap Uncertainty Propagation**:
 
@@ -518,7 +492,7 @@ compositions:
 - **Explicit warnings**: Users know exactly which length data is problematic
 - **Robust processing**: Complete keys ensure all length bins are covered
 - **Maintainable code**: Single-responsibility functions that are easier to
-  debugand extend
+  debug and extend
 
 This enables:
 
@@ -528,149 +502,122 @@ This enables:
   step
 - Clear user feedback about data completeness and processing decisions
 - Stock assessment ready outputs with proper uncertainty quantification
-- Stock assessment ready outputs with proper uncertainty quantification
 
 For detailed documentation of any function, use `?function_name` in R (e.g.,
 `?calculate_length_compositions`).
 
-### Ordinal Age-at-Length Modelling (Optional). WARNING: In development
+## Model-Based Age Composition Frameworks
 
-When raw age-length observations are available, you can fit a smooth ordinal
-age-at-length model and predict an ALK over desired lengths (and sex):
+When raw age observations are available, the package can estimate age
+probabilities from a fitted model instead of a traditional age-length key. Five
+fitted frameworks are provided:
 
-```r
-# Fit model from raw age-length-sex data (one row per aged fish)
-ord <- fit_ordinal_alk(alk_data = age_data, by_sex = TRUE)
+| Fitter                     | Response modelled                       | Probability structure                                          | Temporal effect                                                       | Age support                                                         |
+| -------------------------- | --------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `fit_cohort_alk()`       | Cohort (year class)                     | Cumulative logit; shared cut-points                            | Smooth year effect always included                                    | Cohorts implying age one or older, in fitting and prediction        |
+| `fit_ordinal_alk()`      | Age                                     | Cumulative logit; shared cut-points                            | Smooth year effect when `k_year` is supplied                          | Positive observed ages; gaps retain zero probability                |
+| `fit_multinomial_alk()`  | Age                                     | Separate log odds for each age against a reference age          | Age-specific smooth year effects when `k_year` is supplied            | Positive observed ages; gaps retain zero probability                |
+| `fit_continuation_alk()` | Age, as a sequence of conditional steps | Separate conditional logit for each age step (continuation ratio) | Age-specific year smooths (`k_year`) or cohort random walk (`cohort_rw`) | Positive observed ages; gaps retain zero probability                |
+| `fit_weight_age()`       | Age                                     | Cumulative logit; shared cut-points                            | None built in                                                         | Positive observed ages                                              |
 
-# Predict per-age probabilities for given lengths and sex
-lengths <- 20:70
-sex <- rep(c("male", "female"), each = length(lengths))
-probs <- ord$predict_function(rep(lengths, 2), sex)
+The first four use length (and optionally year, sex and additional covariates)
+as predictors; `fit_weight_age()` uses otolith weight. All five feed the same
+two downstream steps: individual age assignment with `assign_ages()` and scaled
+composition estimation with `calculate_age_compositions_from_model()`.
 
-# Combine into an ALK-like data.frame if needed
-pred_alk <- cbind(
-  data.frame(length = rep(lengths, 2), sex = sex),
-  as.data.frame(probs)
-)
-```
+![Shared model-based age assignment and composition
+workflow](figures/model_workflow.svg)
 
-Notes:
-
-- Uses `mgcv::ocat` with a cumulative-logit link and positive integer age
-  categories.Ages retain their observed values, including ages above 20.
-- Uses `select = TRUE` and `gamma = 1.4` by default. These have the same
-  meanings as in `fit_cohort_alk()`; smooths are not constrained to be
-  monotonic.
-- `k_length` controls the length basis dimension; `k` is a compatible alias.
-  Non-positive values use the same automatic rule as the cohort function.
-- Supplying `k_year` adds a year smooth. Its basis dimension and sex-specific
-  construction match the cohort function. A direct-age model without `k_year`
-  hasno built-in year smooth.
-- `additional_terms`, likelihood weights and `method = "REML"` or `"ML"` have
-  the same meanings in both functions.
-- Fitting stops on invalid inputs, missing covariates or failed convergence.
-  Predictions are finite, non-negative and normalised without clipping or
-  replacementof failed predictions.
-
-For a matched age-versus-cohort comparison, specify the same covariates and
-fitting settings:
-
-```r
-settings <- list(alk_data = age_data, by_sex = TRUE,
-  k_length = 10, k_year = 10,
-  additional_terms = "te(long, lat, k = c(6, 6))",
-  select = TRUE, gamma = 1.4, method = "REML")
-direct <- do.call(fit_ordinal_alk, settings)
-cohort <- do.call(fit_cohort_alk, c(settings, list(age_offset = 1)))
-```
-
-Both return `predict_age(lengths, sampling_years, sex, ...)`, with named age
-columns beginning at age one. Direct-age categories are fixed at the observed
-ages, with zero probability for unobserved categories. Cohort categories are
-converted to age for each sampling year and conditioned on positive-age support.
-These response structures imply different statistical assumptions; matching
-arguments does not make their fitted probabilities identical. The direct-age
-`predict_function()` interface returns only the observed-age columns, aligned
-with `ages`.
+Each framework below is documented with the same structure: an overview and
+workflow flowchart, a method description, the fitting step and its key
+parameters, the shared assignment and composition steps, a complete example and
+guidance on when to use it.
 
 ### Choosing an age-probability model
 
-All three fitters estimate age probabilities conditional on length and fitted
-covariates. Their statistical structures differ:
+All fitters estimate age probabilities conditional on the fitted covariates.
+Their statistical structures differ:
 
-| Function                  | Response and probability structure                    | Year effect                                                 | Age support                                                                             |
-| ------------------------- | ----------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `fit_cohort_alk()`      | Cohort categories with shared ordinal cut-points      | Smooth year effect included                                 | Each fish is restricted to cohorts implying age one or older, in fitting and prediction |
-| `fit_ordinal_alk()`     | Direct age categories with shared ordinal cut-points  | Smooth year effect when`k_year` is supplied               | Positive observed ages; gaps retain zero probability                                    |
-| `fit_multinomial_alk()` | Direct age categories with category-specific log odds | Age-specific smooth year effects when`k_year` is supplied | Positive observed ages; gaps retain zero probability                                    |
+- **Shared-threshold ordinal models** (`fit_cohort_alk()`, `fit_ordinal_alk()`,
+  `fit_weight_age()`) use one latent predictor and a common set of cut-points.
+  Covariates shift the whole age (or cohort) distribution up or down; they
+  cannot independently raise the probability of one particular age. A cohort
+  stays in one response category across years in the cohort model, whereas its
+  age category changes. A smooth year effect controls temporal change in the
+  predictor; it does not independently increase the probability of a particular
+  age or cohort. Separate annual effects relax temporal smoothing but retain the
+  ordinal restriction.
+- **The multinomial model** (`fit_multinomial_alk()`) supplies separate
+  predictors for the log odds of each age against a reference age, allowing
+  age-specific changes with length and year. There is no smoothing across ages.
+- **The continuation-ratio model** (`fit_continuation_alk()`) supplies a
+  separate predictor for each conditional step `P(A = a | A >= a)`. Like the
+  multinomial model it permits age-specific effects, but it follows the natural
+  ordering of ages, and it can either share smooth responses across neighbouring
+  age steps (`age_pooling`) or link age-year effects along cohorts (`cohort_rw`).
+
+Additive length and year smooths do not include a length-year interaction unless
+it is specified explicitly in any framework.
+
+### Shared model settings
 
 `k_length` and `k_year` specify basis dimensions, not fixed smoothing strengths.
 Smoothing parameters are estimated; `select` permits entire smooth terms to
-shrink towards zero, and `gamma` adjusts the smoothing criterion. `by_sex =
-TRUE` supplies sex-specific smooths and a sex main effect. Additional `s`, `te`,
-`ti` and `t2` terms receive `by = sex` unless a by variable is already present.
-Parametric terms are used as supplied. Observation weights enter the likelihood.
-Cohort and direct-age ordinal models support `method = "REML"` or `"ML"`; the
-multinomial backend supports `"REML"` and stops if another method is requested.
-All three methods validate positive ages and convergence. The direct-age fitters
-share input validation and prediction handling; `k` is an alias for `k_length`
-in the ordinal function.
+shrink towards zero, and `gamma` adjusts the smoothing criterion (values greater
+than one favour smoother fits; default 1.4). `by_sex = TRUE` supplies
+sex-specific smooths and a sex main effect. Additional `s`, `te`, `ti` and `t2`
+terms receive `by = sex` unless a by variable is already present (in the
+continuation-ratio model they are shared across age steps unless
+`by = cr_group` is supplied). Parametric terms are used as supplied.
+Observation weights are likelihood weights, not catch totals.
 
-The ordinal models share cut-points and apply a common predictor across
-cumulative response boundaries. A cohort stays in one response category across
-years, whereas its corresponding age category changes. A smooth year effect
-controls temporal change in the predictor; it does not independently increase
-the probability of a particular age or cohort. Separate annual effects relax
-temporal smoothing but retain the ordinal restriction. The multinomial model
-supplies separate predictors for individual age probabilities, allowing
-age-specific changes with year. Additive length and year smooths do not include
-a length-year interaction unless it is specified explicitly.
+| Setting            | Cohort          | Ordinal         | Multinomial | Continuation ratio                          | Otolith weight |
+| ------------------ | --------------- | --------------- | ----------- | ------------------------------------------- | -------------- |
+| `method`           | REML or ML      | REML or ML      | REML        | REML or ML (`engine = "gam"`); fREML (`"bam"`) | mgcv method (default REML) |
+| Automatic `k` rule | Yes             | Yes             | Yes         | No: integers of at least 3, or `NULL` to omit | Yes, from unique otolith weights (`k = -1`) |
+| `plus_group`       | Censored tail   | Pooled before fitting | Pooled before fitting | Pooled before fitting          | Not available  |
 
-The multinomial model uses one observed age as its reference. `reference_age =
-NULL` selects the age with the largest total observation weight; ties select the
-smaller age. Each other age has its own coefficients and smoothing parameters
-relative to that reference. `reference_age` and `model_ages` record the mapping
-to mgcv categories. Predictions from the helpers always return ascending actual
-ages. Penalties are applied to reference-category log odds, so penalised
-estimates can depend on the reference choice. There is no smoothing across ages.
+**Basis dimension (`k`) selection**: non-positive `k_length` and `k_year`
+values in the cohort, ordinal and multinomial fitters use these automatic rules:
 
-The number of multinomial coefficients grows with the number of ages. Many
-sparse age categories can be expensive to fit and weakly supported; this
-implementation does not combine ages automatically. The [mgcv multinomial
-documentation](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/multinom.html)
-describes the underlying model and its computational limitations. The
-implementation has regression tests, but its comparative performance on a
-fishery dataset must be evaluated rather than inferred from this flexibility.
+- **Length terms** (`k` / `k_length`): `min(10, max(3, floor(n_unique_lengths /
+  3)))` -- one-third of the unique length values, clamped between 3 and 10.
+- **Year terms** (`k_year`, when included): `min(10, max(3,
+  floor(n_unique_years / 2)))`. For time series with at most three distinct
+  years, the rule restricts `k_year` to at most `n_unique_years - 1`; the smooth
+  basis still requires enough distinct years to be estimable.
 
-**Sparse-category and convergence caution:** `fit_multinomial_alk()` estimates
-more parameters than the shared ordinal models. Sparse ages, limited coverage
-across years or areas, and covariates that nearly separate age categories can
-produce weakly determined estimates or convergence failures. An optional plus
-group can reduce the number of sparse older-age categories, but does not
-guarantee convergence or reliable predictions. Choose the threshold for each
-analysis and assess sensitivity to grouping and model complexity. Check category
-counts, covariate coverage and held-out predictions. Numerical convergence alone
-does not establish that age-specific effects are well estimated. Fits that fail
-the convergence checks stop with an error.
+These are computational defaults, not evidence that recruitment pulses are
+resolved. Explicit positive values set the basis dimensions; estimated smoothing
+penalties determine the fitted smoothness. The direct-age functions omit their
+built-in year smooth when `k_year = NULL`. `fit_continuation_alk()` defaults to
+`k_length = 5` and `k_year = NULL`.
+
+All fitters validate positive integer ages and convergence. Fits that fail the
+convergence checks, invalid inputs and missing covariates stop with an error.
+Predictions are finite, non-negative and normalised without clipping or
+replacement of failed predictions.
 
 ### Optional age plus groups
 
-All three fitters accept `plus_group = NULL` by default, applying no plus group.
-Supply a positive integer threshold for an individual analysis when the oldest
-ages should be pooled. For example, `plus_group = 50` defines 50+: ages 50 and
-older share the category labelled `age_50`. **50 is an example, not a
-recommended or default threshold.** Choose the threshold from the age coverage
-and objectives of each analysis, and use the same threshold when comparing
-methods.
+The cohort, ordinal, multinomial and continuation-ratio fitters accept
+`plus_group = NULL` by default, applying no plus group. Supply a positive
+integer threshold for an individual analysis when the oldest ages should be
+pooled. For example, `plus_group = 50` defines 50+: ages 50 and older share the
+category labelled `age_50`. **50 is an example, not a recommended or default
+threshold.** Choose the threshold from the age coverage and objectives of each
+analysis, and use the same threshold when comparing methods.
 
-`fit_ordinal_alk()` and `fit_multinomial_alk()` pool observations at or above
-the threshold before fitting. `fit_cohort_alk()` treats those observations as
-censored ages: each contributes the summed probability of cohorts implying an
-age at least equal to the threshold in its sampling year. Younger fish retain
-their exact cohort categories. The oldest cohort category pools the tail at or
-before the first sampling year minus the threshold minus `age_offset`. This
-retains the information that a fish belongs to the plus group without assigning
-it a false exact birth cohort.
+`fit_ordinal_alk()`, `fit_multinomial_alk()` and `fit_continuation_alk()` pool
+observations at or above the threshold before fitting; in the
+continuation-ratio model the plus group is the last category and receives the
+remaining probability. `fit_cohort_alk()` treats those observations as censored
+ages: each contributes the summed probability of cohorts implying an age at
+least equal to the threshold in its sampling year. Younger fish retain their
+exact cohort categories. The oldest cohort category pools the tail at or before
+the first sampling year minus the threshold minus `age_offset`. This retains the
+information that a fish belongs to the plus group without assigning it a false
+exact birth cohort.
 
 With `plus_group = P`, `predict_age()` returns `age_1` through `age_P`; `age_P`
 contains the combined probability for ages P and older. The selected threshold
@@ -707,18 +654,22 @@ settings <- list(alk_data = age_data, by_sex = TRUE,
 ordinal <- do.call(fit_ordinal_alk, settings)
 cohort <- do.call(fit_cohort_alk, c(settings, list(age_offset = 1)))
 multinomial <- do.call(fit_multinomial_alk, settings)
+continuation <- do.call(fit_continuation_alk, settings)
 
 prediction_data <- list(lengths = c(100, 120), sampling_years = 2025,
   sex = "female", long = c(180, 181), lat = c(-70, -71))
 age_probabilities <- lapply(list(ordinal = ordinal, cohort = cohort,
-  multinomial = multinomial), function(model) do.call(model$predict_age, prediction_data))
+  multinomial = multinomial, continuation = continuation),
+  function(model) do.call(model$predict_age, prediction_data))
 ```
 
-All three helpers return `age_N` columns starting at age one, but their maximum
+All helpers return `age_N` columns starting at age one, but their maximum
 supported ages can differ. Match columns by age label when comparing results,
 rather than assuming equal dimensions. The direct-age `predict_function(lengths,
 sex, ...)` returns only observed-age columns; supply `year` and other covariates
-through named arguments.
+through named arguments. Matching arguments does not make the fitted
+probabilities identical: the response structures imply different statistical
+assumptions.
 
 For a direct-age sensitivity with separate annual effects, omit the built-in
 year smooth and specify annual terms:
@@ -746,16 +697,7 @@ is independent of age; it does not make the aged sample representative of catch
 age proportions. Recruitment-signal recovery, prediction error and sampling
 variability must be assessed separately.
 
-`predict_age()` provides probabilities for such a comparison. `assign_ages()`
-applies the same assignment rules to all three fitted models and traditional
-keys. `calculate_age_compositions_from_model()` applies a shared scaling and
-bootstrap workflow to the assigned fish. Use the same assignment convention and
-treatment of fitted-parameter uncertainty when comparing methods.
-
 ### Shared age-assignment and composition workflow
-
-![Shared model-based age assignment and composition
-workflow](figures/model_workflow.svg)
 
 ```r
 model <- fit_multinomial_alk(age_data, k_length = 10, k_year = 10)
@@ -781,18 +723,19 @@ and its terminal label represents the inclusive plus group.
 
 The model-specific wrappers use the same implementation:
 
-| Fitted model    | Assignment wrapper                 | Composition wrapper                               | Model argument in wrappers |
-| --------------- | ---------------------------------- | ------------------------------------------------- | -------------------------- |
-| Cohort          | `assign_ages_from_cohort()`      | `calculate_age_compositions_from_cohort()`      | `cohort_model`           |
-| Ordinal age     | `assign_ages_from_ordinal()`     | `calculate_age_compositions_from_ordinal()`     | `ordinal_model`          |
-| Multinomial age | `assign_ages_from_multinomial()` | `calculate_age_compositions_from_multinomial()` | `multinomial_model`      |
-| Otolith weight  | `assign_ages_from_weight()`      | `calculate_age_compositions_from_weight()`      | `weight_age_model`       |
+| Fitted model       | Assignment function                | Composition function                              | Model argument             |
+| ------------------ | ---------------------------------- | ------------------------------------------------- | -------------------------- |
+| Cohort             | `assign_ages_from_cohort()`      | `calculate_age_compositions_from_cohort()`      | `cohort_model`           |
+| Ordinal age        | `assign_ages_from_ordinal()`     | `calculate_age_compositions_from_ordinal()`     | `ordinal_model`          |
+| Multinomial age    | `assign_ages_from_multinomial()` | `calculate_age_compositions_from_multinomial()` | `multinomial_model`      |
+| Continuation ratio | `assign_ages_from_continuation()` | `calculate_age_compositions_from_continuation()` | `continuation_model`     |
+| Otolith weight     | `assign_ages_from_weight()`      | `calculate_age_compositions_from_weight()`      | `weight_age_model`       |
 
 Use `model` as the argument name in the generic functions. The assignment
 wrappers validate their model classes and delegate to `assign_ages()`. The
-cohort, ordinal and multinomial composition wrappers delegate to
-`calculate_age_compositions_from_model()`; the established weight composition
-function also uses shared assignment through its weight wrapper.
+cohort, ordinal, multinomial and continuation-ratio composition wrappers
+delegate to `calculate_age_compositions_from_model()`; the established weight
+composition function also uses shared assignment through its weight wrapper.
 
 `method = "random"` samples from each fish's age probabilities and preserves the
 mixture in expectation. `"mode"` selects the most probable age, choosing the
@@ -803,11 +746,12 @@ expected value is based on capped ages.
 
 For year-dependent models, `predict_missing = FALSE` assigns NA in years absent
 from training. Set it to TRUE to request prediction in those years, subject to
-model support: annual factors require fitted levels, and cohort plus-group
-models require years at or after the first training year. Direct-age models
-without year effects predict all rows. Missing otolith weights receive NA ages;
-invalid probability distributions and missing required fitted covariates stop
-with an error.
+model support: annual factors require fitted levels, cohort plus-group models
+require years at or after the first training year, and continuation-ratio
+cohort random walks require years within the fitted year range. Direct-age
+models without year effects predict all rows. Missing otolith weights receive NA
+ages; invalid probability distributions and missing required fitted covariates
+stop with an error.
 
 Traditional keys can also be applied to individual length observations:
 
@@ -831,7 +775,7 @@ refitting, parameter draws or bootstrap keys in the uncertainty analysis. The
 supplied ages determine the point composition, and `model` has no effect when
 `bootstraps = 0`.
 
-### Cohort-Based Age Composition Workflow
+## Cohort-Based Age Composition Workflow
 
 The package calculates scaled age compositions using cohort probabilities
 conditional on fish length, sampling year and fitted covariates. Fitting and
@@ -840,7 +784,7 @@ its sampling year.
 
 ![Cohort-based age composition workflow](figures/cohort_workflow.svg)
 
-#### Overview
+### Overview
 
 The cohort workflow consists of three steps:
 
@@ -853,7 +797,39 @@ This approach directly assigns ages to individual fish observations and then
 applies the same scaling methodology used in length composition calculations,
 providing a seamless integration with existing workflows.
 
-#### Step 1: Fit Cohort Model
+### Method
+
+Each aged fish is converted to its cohort (year class):
+
+```text
+cohort = sampling_year - age - age_offset
+```
+
+Cohorts are ordered categories `c_1 < ... < c_K`, modelled with `mgcv::ocat`
+(cumulative logit) using one latent predictor and shared cut-points:
+
+```text
+P(C <= c_j | x) = logistic(theta_j - eta(x))
+
+eta(x) = s(length, by = sex) + s(year, by = sex) + sex + additional terms
+```
+
+Without `by_sex` the smooths are not sex-specific and the sex main effect is
+omitted. In a given sampling year only cohorts implying an age of at least one
+are admissible, so fitting and prediction condition on positive integer ages:
+
+```text
+P(C = c | x, y) = P_ocat(C = c | x) / sum over admissible c' of P_ocat(C = c' | x)
+P(A = a | x, y) = P(C = y - a - age_offset | x, y)
+```
+
+Smooth coefficients, cohort cut-points and smoothing parameters are estimated
+under this conditional likelihood (`REML` or `ML`). Because the response is the
+cohort rather than the age, a fish's category stays fixed as it ages; the
+shared-threshold restriction described for the [ordinal
+model](#ordinal-age-composition-workflow) applies to cohort categories.
+
+### Step 1: Fit Cohort Model
 
 ```r
 # Your aged subsample needs: age, length, year, sex (optional)
@@ -882,7 +858,7 @@ print(cohort_model)
   sex data)
 - `age_offset`: Year class offset (default 1, meaning YC = Year - Age - 1)
 - `k_length`, `k_year`: Basis dimensions for smooth terms (auto-selected by
-  default;see below)
+  default; see below)
 - `select`: Whether to add an extra penalty allowing smooth terms to be
   penalised to zero for variable selection (default TRUE)
 - `gamma`: Multiplier for effective degrees of freedom in smoothing parameter
@@ -896,23 +872,8 @@ print(cohort_model)
 - `plus_group`: Optional positive integer defining an inclusive age plus group;
   NULL applies no plus group
 
-**Basis dimension (`k`) selection**:
-
-The basis dimensions limit each smooth's complexity. Non-positive `k_length` and
-`k_year` values use the following automatic rules in the three fitted-model
-functions:
-
-- **Length terms** (`k` / `k_length`): `min(10, max(3, floor(n_unique_lengths /
-  3)))`-- uses one-third of the unique length values, clamped between 3 and 10.
-- **Year terms** (`k_year`, when included): `min(10, max(3,
-  floor(n_unique_years / 2)))`. For time series with at most three distinct
-  years, the rule restricts `k_year` to at most `n_unique_years - 1`; the smooth
-  basis still requires enough distinct years to be estimable.
-
-These are computational defaults, not evidence that recruitment pulses are
-resolved. Explicit positive values set the basis dimensions; estimated smoothing
-penalties determine the fitted smoothness. The direct-age functions omit their
-built-in year smooth when `k_year = NULL`.
+Basis dimensions follow the automatic rules in [Shared model
+settings](#shared-model-settings).
 
 **Model Features**:
 
@@ -922,7 +883,7 @@ built-in year smooth when `k_year = NULL`.
 - Estimates smooth coefficients, cohort cut-points and smoothing parameters
   under the conditional likelihood
 - Uses `select = TRUE` and `gamma = 1.4` by default for regularisation and
-  overfittingprotection
+  overfitting protection
 - Provides two prediction functions: `predict_cohort()` and `predict_age()`
 - Automatically handles sex-specific growth patterns
 - Validates year range and data structure
@@ -941,7 +902,7 @@ estimates smoothing parameters with this likelihood. Age zero is outside the
 sampling support, and input ages must be positive integers. The fitted object's
 `age_support` metadata records this rule.
 
-#### Step 2: Assign Ages to Fish Data
+### Step 2: Assign Ages to Fish Data
 
 ```r
 # Your fish data needs: length, year, sex (if model was fitted with by_sex=TRUE)
@@ -973,11 +934,11 @@ table(fish_with_ages$age)
   including years not present in the cohort model's training data (i.e., years
   with length observations but no age data). When `FALSE` (default), fish from
   non-training years are assigned `NA`. The cohort model
-  interpolates/extrapolatesfrom surrounding year classes to fill these gaps.
+  interpolates/extrapolates from surrounding year classes to fill these gaps.
 - `seed`: Set random seed for reproducible sampling (when method = "random")
 - `keep_probabilities`: Retain all age probabilities in output (default FALSE)
 
-#### Step 3: Calculate Scaled Age Compositions
+### Step 3: Calculate Scaled Age Compositions
 
 ```r
 # Define length-weight parameters
@@ -1019,7 +980,7 @@ print(age_comps$pooled_age_cv)
 - `age_cvs`: Coefficients of variation from bootstrap
 - `age_ci_lower`, `age_ci_upper`: Bootstrap confidence intervals
 
-#### Complete Example
+### Complete Example
 
 ```r
 # Complete workflow from start to finish
@@ -1062,7 +1023,7 @@ summary_stats <- data.frame(
 print(summary_stats)
 ```
 
-#### When to Use Cohort Modelling
+### When to Use Cohort Modelling
 
 **Advantages**:
 
@@ -1084,11 +1045,585 @@ print(summary_stats)
 - **Traditional ALK**: Single-year focus, simple age-length relationship
 - **Cohort Model**: Multi-year temporal tracking, cohort-based predictions
 
-For complete details, see `COHORT_AGE_WORKFLOW.md` and run the demo script:
+For a worked demonstration, run the demo script:
 
 ```r
 source("Test/demo_cohort_age_compositions.R")
 ```
+
+## Ordinal Age Composition Workflow
+
+**WARNING: In development.** The package calculates scaled age compositions
+using direct-age probabilities from a shared-threshold ordinal (cumulative
+logit) model of age at length.
+
+![Ordinal age composition workflow](figures/ordinal_workflow.svg)
+
+### Overview
+
+The ordinal workflow consists of three steps:
+
+1. **Fit ordinal model** on the aged subsample using `fit_ordinal_alk()`
+2. **Assign ages** to all fish using `assign_ages_from_ordinal()` (or
+   `assign_ages()`)
+3. **Calculate scaled age compositions** using
+   `calculate_age_compositions_from_ordinal()` (or
+   `calculate_age_compositions_from_model()`)
+
+### Method
+
+The response is the observed age category `A` with ordered levels
+`a_1 < a_2 < ... < a_K` (the distinct observed ages, after any plus group).
+The model uses `mgcv::ocat` with a cumulative-logit link, a single latent
+predictor `eta(x)` and `K - 1` estimated cut-points `theta_j`:
+
+```text
+P(A <= a_j | x) = logistic(theta_j - eta(x)),          j = 1, ..., K - 1
+P(A  = a_j | x) = P(A <= a_j | x) - P(A <= a_(j-1) | x)
+
+eta(x) = s(length, by = sex) + [s(year, by = sex)] + sex + additional terms
+```
+
+The year smooth is included only when `k_year` is supplied; without `by_sex`
+the smooths are not sex-specific and the sex main effect is omitted. Smooths
+are not constrained to be monotonic. Smooth coefficients, cut-points and
+smoothing parameters are estimated by penalised likelihood (`REML` or `ML`)
+with `select = TRUE` and `gamma = 1.4` by default.
+
+Because every age shares the same predictor, a covariate can only shift the
+whole age distribution: it cannot raise one age while lowering its neighbours.
+Ages retain their observed values, including ages above 20 and gaps between
+observed ages, which receive zero probability.
+
+**Suitability warning**: The shared-threshold ordinal age model is unlikely to
+be useful for recovering changing cohort-strength patterns in catch-at-age
+compositions. It models age through common cumulative-logit thresholds;
+covariates shift a common latent predictor rather than providing independent
+age-specific responses. A strong or weak cohort moves through successive ages
+over time, which this structure can attenuate even when the broad age-length or
+cohort-trajectory shape appears reasonable. Increasing basis dimensions or
+relaxing smoothing does not remove the shared-threshold restriction. In a
+simulation with cohort-model-generated truth, the fitted ordinal age
+specification substantially attenuated imposed strong and weak cohort contrasts.
+This is evidence against this specification for cohort-strength recovery; use
+`fit_multinomial_alk()` or `fit_continuation_alk()` when age-specific temporal
+change matters.
+
+### Step 1: Fit Ordinal Model
+
+```r
+# Fit model from raw age-length-sex data (one row per aged fish)
+ord <- fit_ordinal_alk(alk_data = age_data, by_sex = TRUE,
+  k_length = 10, k_year = 10)
+print(ord)
+
+# Predict per-age probabilities for given lengths, sexes and years
+lengths <- 20:70
+sex <- rep(c("male", "female"), each = length(lengths))
+probs <- ord$predict_age(rep(lengths, 2), sampling_years = 2025, sex = sex)
+```
+
+**Key Parameters**:
+
+- `alk_data`: Data frame (or named list of sex-specific frames) with `age`,
+  `length`, and `sex` when `by_sex = TRUE`; `year` when `k_year` is supplied
+- `by_sex`: Sex-specific smooths and a sex main effect (default TRUE)
+- `k_length` (alias `k`): Length basis dimension; non-positive values use the
+  automatic rule
+- `k_year`: Year basis dimension; `NULL` (default) omits the year smooth
+- `additional_terms`, `select`, `gamma`, `method`, `weights`, `plus_group`: see
+  [Shared model settings](#shared-model-settings)
+
+`predict_age(lengths, sampling_years, sex, ...)` returns columns `age_1` to the
+maximum observed age (or the plus group), with zeros for unobserved categories.
+`predict_function(lengths, sex, ...)` returns only the observed-age columns,
+aligned with `ages`. See [fit_ordinal_alk()](#fit_ordinal_alk) for the full
+argument and return-value list.
+
+### Step 2: Assign Ages to Fish Data
+
+```r
+fish_aged <- assign_ages_from_ordinal(
+  fish_data     = raw_fish_data,
+  ordinal_model = ord,
+  method        = "random",   # "random", "mode", or "expected"
+  seed          = 42
+)
+```
+
+Assignment methods and `predict_missing` behave as described in the
+[shared workflow](#shared-age-assignment-and-composition-workflow).
+
+### Step 3: Calculate Scaled Age Compositions
+
+```r
+age_comps <- calculate_age_compositions_from_ordinal(
+  fish_data         = fish_aged,
+  strata_data       = strata_data,
+  age_range         = c(1, 20),
+  lw_params_male    = lw_male,
+  lw_params_female  = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps        = 300,
+  ordinal_model     = ord,      # redraw ages in each bootstrap iteration
+  plus_group_age    = TRUE
+)
+```
+
+### Complete Example
+
+```r
+library(scala)
+
+# Step 1: Fit ordinal model
+ord <- fit_ordinal_alk(aged_fish_subsample, by_sex = TRUE, k_length = 10)
+
+# Step 2: Assign ages
+fish_aged <- assign_ages_from_ordinal(full_fish_data, ord,
+  method = "random", seed = 42)
+
+# Step 3: Calculate compositions with sampling and assignment variability
+age_results <- calculate_age_compositions_from_ordinal(
+  fish_data = fish_aged, strata_data = strata_info, age_range = c(1, 20),
+  lw_params_male = lw_male, lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed, bootstraps = 300, ordinal_model = ord)
+
+plot(age_results, by_stratum = FALSE, show_CIs = TRUE)
+```
+
+### When to Use the Ordinal Approach
+
+**Advantages**:
+
+- Parsimonious: one predictor and `K - 1` cut-points, regardless of the number
+  of ages
+- Stable with sparse older ages, because all ages share the predictor
+- Smooth, ordered age-at-length probabilities without length binning
+
+**Best suited for**:
+
+- Single-year or pooled analyses where age-specific temporal change is not of
+  interest
+- A low-variance baseline against which to compare more flexible models
+
+**Not suited for**: recovering strong or weak year classes; see the
+suitability warning above.
+
+## Multinomial Age Composition Workflow
+
+The package calculates scaled age compositions using direct-age probabilities
+from a penalised multinomial-logit model, in which each age has its own smooth
+relationships with length, year and other covariates.
+
+![Multinomial age composition workflow](figures/multinomial_workflow.svg)
+
+### Overview
+
+The multinomial workflow consists of three steps:
+
+1. **Fit multinomial model** on the aged subsample using
+   `fit_multinomial_alk()`
+2. **Assign ages** to all fish using `assign_ages_from_multinomial()` (or
+   `assign_ages()`)
+3. **Calculate scaled age compositions** using
+   `calculate_age_compositions_from_multinomial()` (or
+   `calculate_age_compositions_from_model()`)
+
+### Method
+
+The response is the observed age category with levels `a_1, ..., a_K`. One
+observed age is the reference `r`; each other age `a` has its own linear
+predictor of its log odds against the reference, and a softmax transformation
+gives probabilities that sum to one:
+
+```text
+log[ P(A = a | x) / P(A = r | x) ] = eta_a(x),            a != r
+P(A = a | x) = exp(eta_a(x)) / (1 + sum_b exp(eta_b(x)))   (eta_r = 0)
+
+eta_a(x) = s_a(length, by = sex) + [s_a(year, by = sex)] + sex_a + additional terms_a
+```
+
+Every non-reference age uses the same requested terms, but their coefficients
+and smoothing parameters are estimated separately, using `mgcv::multinom`.
+Smoothing parameters are estimated by outer BFGS optimisation of the REML
+criterion, retaining the requested `gamma` and `select` penalties. The model
+does not impose shared ordinal cut-points or a monotonic relationship between
+age and length, and there is no smoothing across ages.
+
+`reference_age = NULL` selects the age with the largest total observation
+weight; ties select the smaller age. `reference_age` and `model_ages` record the
+mapping to mgcv categories. Predictions from the helpers always return ascending
+actual ages. Penalties are applied to reference-category log odds, so penalised
+estimates can depend on the reference choice.
+
+The number of coefficients grows with the number of ages. Many sparse age
+categories can be expensive to fit and weakly supported; this implementation
+does not combine ages automatically. The [mgcv multinomial
+documentation](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/multinom.html)
+describes the underlying model and its computational limitations.
+
+**Sparse-category and convergence caution:** `fit_multinomial_alk()` estimates
+more parameters than the shared ordinal models. Sparse ages, limited coverage
+across years or areas, and covariates that nearly separate age categories can
+produce weakly determined estimates or convergence failures. An optional plus
+group can reduce the number of sparse older-age categories, but does not
+guarantee convergence or reliable predictions. Choose the threshold for each
+analysis and assess sensitivity to grouping and model complexity. Check category
+counts, covariate coverage and held-out predictions. Numerical convergence alone
+does not establish that age-specific effects are well estimated.
+
+### Step 1: Fit Multinomial Model
+
+```r
+mn <- fit_multinomial_alk(age_data, by_sex = TRUE, k_length = 10, k_year = 10,
+  additional_terms = "te(long, lat, k = c(6, 6))")
+print(mn)
+
+probability <- mn$predict_age(c(100, 120), sampling_years = 2025,
+  sex = "female", long = c(180, 181), lat = c(-70, -71))
+```
+
+**Key Parameters**:
+
+- `alk_data`, `by_sex`, `k_length`, `k_year`, `additional_terms`, `select`,
+  `gamma`, `weights`, `plus_group`: as for `fit_ordinal_alk()`; see
+  [Shared model settings](#shared-model-settings)
+- `reference_age`: Reference category; `NULL` selects the most heavily weighted
+  age
+- `method`: Only `"REML"` is supported
+
+### Step 2: Assign Ages to Fish Data
+
+```r
+fish_aged <- assign_ages_from_multinomial(
+  fish_data         = raw_fish_data,
+  multinomial_model = mn,
+  method            = "random",
+  seed              = 42
+)
+```
+
+### Step 3: Calculate Scaled Age Compositions
+
+```r
+age_comps <- calculate_age_compositions_from_multinomial(
+  fish_data         = fish_aged,
+  strata_data       = strata_data,
+  age_range         = c(1, 20),
+  lw_params_male    = lw_male,
+  lw_params_female  = lw_female,
+  lw_params_unsexed = lw_unsexed,
+  bootstraps        = 300,
+  multinomial_model = mn,
+  plus_group_age    = TRUE
+)
+```
+
+### Complete Example
+
+```r
+library(scala)
+
+# Step 1: Fit multinomial model, with an analysis-specific plus group
+mn <- fit_multinomial_alk(aged_fish_subsample, by_sex = TRUE,
+  k_length = 10, k_year = 10, plus_group = 15)
+
+# Step 2: Assign ages
+fish_aged <- assign_ages_from_multinomial(full_fish_data, mn,
+  method = "random", seed = 42)
+
+# Step 3: Calculate compositions
+age_results <- calculate_age_compositions_from_multinomial(
+  fish_data = fish_aged, strata_data = strata_info, age_range = c(1, 15),
+  lw_params_male = lw_male, lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed, bootstraps = 300, multinomial_model = mn)
+
+plot(age_results, by_stratum = FALSE, show_CIs = TRUE)
+```
+
+### When to Use the Multinomial Approach
+
+**Advantages**:
+
+- Age-specific length and year effects: individual ages can increase or
+  decrease independently, so year-class signals are not forced through a
+  common predictor
+- No ordering or monotonicity assumptions
+
+**Best suited for**:
+
+- Well-sampled data with moderate numbers of ages
+- Multi-year data where age-specific temporal change matters
+
+**Limitations**: parameter count grows with the number of ages; sparse ages and
+quasi-separation can cause weak estimates or convergence failure; estimates
+depend on the reference age; no information is shared between neighbouring
+ages.
+
+## Continuation-Ratio Age Composition Workflow
+
+The package calculates scaled age compositions using a continuation-ratio model:
+the age distribution is built from a sequence of age-specific conditional
+logits, each with its own length, year and sex effects. Optional random-walk
+effects follow cohorts through time, and optional pooling shares smooth
+responses across neighbouring ages.
+
+![Continuation-ratio age composition workflow](figures/continuation_workflow.svg)
+
+### Overview
+
+The continuation-ratio workflow consists of three steps:
+
+1. **Fit continuation-ratio model** on the aged subsample using
+   `fit_continuation_alk()`
+2. **Assign ages** to all fish using `assign_ages_from_continuation()` (or
+   `assign_ages()`)
+3. **Calculate scaled age compositions** using
+   `calculate_age_compositions_from_continuation()` (or
+   `calculate_age_compositions_from_model()`)
+
+### Method
+
+![Continuation-ratio model structure](figures/continuation_method.svg)
+
+**Conditional steps.** Let `a_1 < a_2 < ... < a_K` be the observed ages (after
+any plus group). For every age `a` below the oldest, the model estimates the
+conditional probability that a fish is exactly age `a`, given that it is at
+least age `a`:
+
+```text
+q_a(x) = P(A = a | A >= a, x),        a = a_1, ..., a_(K-1)
+```
+
+**Reconstructing age probabilities.** The unconditional age distribution is
+rebuilt by passing the remaining probability along the steps:
+
+```text
+R_(a_1) = 1
+P(A = a_j | x) = R_(a_j) * q_(a_j)(x)          j < K
+R_(a_(j+1))    = R_(a_j) * (1 - q_(a_j)(x))
+P(A = a_K | x) = R_(a_K)                       (the oldest category, or plus group)
+```
+
+Each row of probabilities sums to one by construction, and unobserved ages
+receive zero probability.
+
+**Likelihood.** Each fish is expanded into one Bernoulli row per eligible step:
+a 0 at every step younger than its age, and a 1 at its observed age (a fish in
+the oldest category contributes a 0 at every step). The product of these
+Bernoulli terms equals the individual categorical likelihood, so the model is
+fitted as a binomial GAM on the expanded data, with each fish's weight carried
+to all of its rows. Expanded rows are not independent fish: resample original
+fish or sets, never expanded rows. Every conditional step must have
+positive-weight fish both at and above that age.
+
+**Step predictors.** Each step has its own logit-linear predictor. With
+`by_sex = TRUE`, each age-sex combination (`cr_group`) is a separate step:
+
+```text
+logit q_(a,sex)(x) = beta_(a,sex) + f_(a,sex)(length) + temporal_(a,sex) + additional terms
+
+temporal_(a,sex) = 0                          (default)
+                 = g_(a,sex)(year)            (k_year: age-specific year smooths)
+                 = u_(a,year,sex)             (cohort_rw: cohort random walk)
+```
+
+Intercepts and smooths are specific to each age-sex step. Smooths of the same
+covariate share one smoothing parameter across steps (mgcv `id`), which
+regularises them consistently but does **not** impose a common curve or
+cumulative proportional odds.
+
+**Cohort random walk (`cohort_rw = TRUE`).** Age-year deviations
+`u[a, y, sex]` are linked along cohorts. Two separately estimated penalties
+apply: one on successive differences along each cohort and one on each cohort's
+initial deviation:
+
+```text
+u[a+1, y+1, sex] - u[a, y, sex]   ~ random-walk increment (variance ∝ elapsed years)
+u[first age or year of a cohort]  ~ shrunk towards zero
+```
+
+A strong or weak year class can therefore carry its conditional deviation
+forward through successive ages and years, rather than being smoothed away by a
+year effect common to all ages. Initial cohort deviations are shrunk towards
+zero, not treated as unrestricted fixed effects, and the age-specific intercepts
+remain outside the penalty. These are conditional composition effects, not
+survival, recruitment or mortality estimates. `cohort_rw` requires consecutive
+observed ages (unless `age_pooling = TRUE`), at least two conditional age steps
+and at least two years, and cannot be combined with `k_year`: they are
+alternative temporal specifications. Predictions are restricted to the fitted
+year range (internal missing years are allowed); no random-walk forecasting is
+performed.
+
+**Age pooling (`age_pooling = TRUE`).** For sparse age-sex groups, length and
+year smooths become tensor-product smooths over covariate and age step,
+`te(length, step, by = sex)` and `te(year, step, by = sex)`, so responses borrow
+strength from neighbouring ages while retaining separate surfaces for males and
+females. Age intercepts remain unrestricted. Individual age-sex groups no longer
+need to contain both outcomes, but each age step does. Pooled smooths require at
+least three conditional steps. The intercept structure depends on
+`sex_pooling`:
+
+| `sex_pooling`    | Age-step intercepts                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `TRUE` (default) | Unrestricted age intercepts plus a sex main effect; age-sex deviations are random effects penalised towards zero (shared across sexes) |
+| `FALSE`          | Separate smooth age baseline within each sex, `s(step, by = sex)`, plus penalised age deviations shrinking to that same-sex baseline   |
+
+These are explicit alternative assumptions, not automatic remedies for failed
+fits. Missing observed ages retain zero probability. Inspect older-age
+predictions separately by sex, particularly where asymptotic lengths differ.
+
+**Fitting engines.** The default `engine = "gam"` fits a dense expanded
+binomial `mgcv::gam` (`method = "REML"` or `"ML"`); cohort random-walk effects
+enter as a penalised parametric block. `engine = "bam"` uses `mgcv::bam` with
+discretised covariates, fast REML and a factor random effect carrying the same
+random-walk penalties, avoiding a dense fish-by-cell matrix for larger datasets.
+Memory grows with the number of fish, age steps and (for `cohort_rw`) age-year
+cells under both engines; evaluate a representative subset before large fits.
+
+**Predictions.** The fitted object provides three helpers:
+
+- `predict_conditional(lengths, sampling_years, sex, ...)`: the step
+  probabilities `q_a`
+- `predict_function(lengths, sex, ...)`: probabilities for the observed age
+  categories
+- `predict_age(lengths, sampling_years, sex, ...)`: `age_1` to the maximum age
+  (or plus group), with zeros for gaps; used by `assign_ages()` and
+  `assign_ages_from_continuation()`
+
+Random assignment does not propagate fitted-parameter uncertainty.
+
+### Step 1: Fit Continuation-Ratio Model
+
+```r
+# aged_fish needs: age, length, sex (when by_sex = TRUE), year (for temporal effects)
+fit <- fit_continuation_alk(
+  aged_fish,
+  by_sex    = TRUE,
+  k_length  = 5,       # length basis per age-sex step
+  cohort_rw = TRUE,    # cohort-following random walk ...
+  age_offset = 1       # ... with cohort = year - age - age_offset
+)
+print(fit)
+
+# Conditional step probabilities and reconstructed age probabilities
+fit$predict_conditional(c(100, 120), sampling_years = 2025, sex = "female")
+fit$predict_age(c(100, 120), sampling_years = 2025, sex = "female")
+```
+
+Alternative specifications:
+
+```r
+# Age-specific year smooths instead of a cohort random walk
+fit_year <- fit_continuation_alk(aged_fish, k_length = 5, k_year = 5)
+
+# Sparse ages: pool smooths across neighbouring age steps
+fit_pooled <- fit_continuation_alk(aged_fish, k_length = 5,
+  cohort_rw = TRUE, age_pooling = TRUE, sex_pooling = FALSE)
+
+# Large datasets: discretised bam backend
+fit_big <- fit_continuation_alk(aged_fish, k_length = 5,
+  cohort_rw = TRUE, engine = "bam")
+```
+
+**Key Parameters**:
+
+- `by_sex`: Separate intercepts and smooths for each age-sex step (default
+  TRUE)
+- `k_length`: Length basis dimension, an integer of at least 3 (default 5);
+  `NULL` omits the length effect
+- `k_year`: Year basis dimension for age-specific year smooths; `NULL`
+  (default) omits them
+- `cohort_rw`: Age-year random-walk effects along cohorts (default FALSE);
+  alternative to `k_year`
+- `age_offset`: Cohort definition, `year - age - age_offset` (default 1)
+- `age_pooling`: Pool length/year smooths across age steps (default FALSE)
+- `sex_pooling`: Intercept pooling when `age_pooling = TRUE` (default TRUE)
+- `engine`: `"gam"` (default) or `"bam"` for large data
+- `method`: `"REML"`/`"ML"` for `gam`; `"fREML"` for `bam`
+- `additional_terms`: Shared across age steps unless a smooth specifies
+  `by = cr_group`; cannot use `age` or internal `cr_` variables
+- `select`, `gamma`, `weights`, `plus_group`: see
+  [Shared model settings](#shared-model-settings)
+
+### Step 2: Assign Ages to Fish Data
+
+```r
+fish_aged <- assign_ages_from_continuation(
+  fish_data          = length_data,
+  continuation_model = fit,
+  method             = "random",   # "random", "mode", or "expected"
+  seed               = 7
+)
+```
+
+With `cohort_rw = TRUE` or `k_year`, fish from years outside the training years
+receive NA unless `predict_missing = TRUE`; random-walk predictions remain
+restricted to the fitted year range.
+
+### Step 3: Calculate Scaled Age Compositions
+
+```r
+age_comps <- calculate_age_compositions_from_continuation(
+  fish_data          = fish_aged,
+  strata_data        = strata_data,
+  age_range          = c(1, 20),
+  lw_params_male     = lw_male,
+  lw_params_female   = lw_female,
+  lw_params_unsexed  = lw_unsexed,
+  bootstraps         = 300,
+  continuation_model = fit,      # redraw ages in each bootstrap iteration
+  plus_group_age     = TRUE
+)
+```
+
+### Complete Example
+
+```r
+library(scala)
+
+# Step 1: Fit continuation-ratio model with cohort random walk
+fit <- fit_continuation_alk(aged_fish_subsample, by_sex = TRUE,
+  k_length = 5, cohort_rw = TRUE, plus_group = 15)
+
+# Step 2: Assign ages
+fish_aged <- assign_ages_from_continuation(full_fish_data, fit,
+  method = "random", seed = 7)
+
+# Step 3: Calculate compositions with sampling and assignment variability
+age_results <- calculate_age_compositions_from_continuation(
+  fish_data = fish_aged, strata_data = strata_info, age_range = c(1, 15),
+  lw_params_male = lw_male, lw_params_female = lw_female,
+  lw_params_unsexed = lw_unsexed, bootstraps = 300, continuation_model = fit)
+
+plot(age_results, by_stratum = FALSE, show_CIs = TRUE)
+```
+
+### When to Use the Continuation-Ratio Approach
+
+**Advantages**:
+
+- Age-specific conditional effects without the shared-threshold restriction of
+  the ordinal models
+- Follows the natural ordering of ages; each step uses only fish old enough to
+  reach it
+- `cohort_rw` lets year-class strength persist along cohorts instead of being
+  absorbed by a common year effect
+- `age_pooling` offers explicit, interpretable borrowing between neighbouring
+  ages for sparse data
+
+**Best suited for**:
+
+- Multi-year data where recovering changing cohort contributions matters
+- Analyses with sparse older ages, using `age_pooling` and/or a plus group
+
+**Cautions**: Every conditional step (or age-sex step without pooling) must
+contain fish both at and above that age. The expanded data and, with
+`cohort_rw`, the number of age-year cells, determine memory use. Check
+predictions by sex at older ages, compare the temporal specifications
+(`k_year`, `cohort_rw`, none), and assess held-out performance; numerical
+convergence alone does not establish that age-specific effects are well
+estimated.
 
 ## Otolith Weight-Based Age Composition Workflow
 
@@ -1112,6 +1647,24 @@ The workflow is directly analogous to the cohort workflow but uses otolith
 weight (a continuous proxy for age) rather than length-year cohort signals. It
 supports both commercial (weight-based) and survey (density-based) scaling, and
 full two-source bootstrap uncertainty propagation.
+
+### Method
+
+`fit_weight_age()` uses the same cumulative-logit (`mgcv::ocat`) structure as
+`fit_ordinal_alk()`, with otolith weight in place of length:
+
+```text
+P(A <= a_j | x) = logistic(theta_j - eta(x))
+
+eta(x) = s(weight, by = sex) + sex + additional terms     (by_sex = TRUE)
+eta(x) = s(weight) + additional terms                     (by_sex = FALSE)
+```
+
+There is no built-in year effect or plus group. The automatic basis dimension
+is `min(10, max(3, floor(n_unique_weights / 3)))`. Fish with weights outside the
+training range still receive predictions, with a warning. The shared-threshold
+restriction described for the [ordinal model](#ordinal-age-composition-workflow)
+applies.
 
 ### Step 1: Fit Weight-Age Model
 
@@ -1167,7 +1720,7 @@ table(fish_aged$age)
 **Assignment Methods**:
 
 - `"random"` (default): Stochastic sampling from the age probability
-  distribution— recommended when propagating uncertainty
+  distribution — recommended when propagating uncertainty
 - `"mode"`: Most probable age (deterministic)
 - `"expected"`: Expected (mean) age, rounded to nearest integer
 
@@ -1265,9 +1818,9 @@ plot(age_results, by_stratum = FALSE, show_CIs = TRUE)
 **Advantages**:
 
 - Otolith weight is a continuous, smoothly-varying proxy for age — often
-  better-behavedthan discrete length-class assignments
+  better-behaved than discrete length-class assignments
 - Single-year datasets are sufficient (no multi-year temporal signal required,
-  unlikecohort models)
+  unlike cohort models)
 - Simple model structure: weight → age probabilities without needing
   year/cohort information
 - Uncertainty propagation is straightforward via the `weight_age_model`
@@ -1372,13 +1925,13 @@ fisheries analysis where age-length coverage is incomplete or sparse.
 ### Key Features
 
 - **Raw Data Input**: Takes raw age-length data (one row per aged fish) rather
-  thanpre-processed age-length keys
+  than pre-processed age-length keys
 - **Automatic Key Creation**: Converts raw data to proportional age-length keys
   with comprehensive interpolation/extrapolation
 - **Bootstrap Uncertainty**: Optional bootstrap resampling of otolith data to
   propagate ALK sampling uncertainty through age compositions
 - **Length Binning**: Optional binning of length data (e.g., 2cm or 5cm bins)
-  toconsolidate sparse data
+  to consolidate sparse data
 - **Interpolation Control**: Optional linear interpolation between observed
   length bins
 - **Extrapolation Control**: Optional extrapolation beyond the observed length
@@ -1417,7 +1970,7 @@ For missing lengths that fall **between** observed data points:
 
 - **Method**: Distance-weighted linear interpolation
 - **Calculation**: `interpolated_prop = weight_lower x lower_prop +
-  weight_upperx upper_prop`
+  weight_upper x upper_prop`
 - **Weights**: Based on distance from bracketing lengths
 - **Assumption**: Age composition changes gradually between observed lengths
 
@@ -1449,9 +2002,9 @@ The algorithms are applied in this order for each missing length:
 
 1. Check for user-specified tail ages -> if found, use exact specification
 2. If not found and length is between observed data -> use linear interpolation
-   (ifenabled)
+   (if enabled)
 3. If not found and length is beyond observed range -> use constant
-   extrapolation(if enabled)
+   extrapolation (if enabled)
 4. If disabled, the length remains unfilled (user must handle manually)
 
 This hierarchical approach ensures expert knowledge takes precedence while
@@ -1588,7 +2141,7 @@ age_results <- calculate_age_compositions(
 - Number of ALK bootstraps must match the number of length composition
   bootstraps
 - When ALK bootstraps are present, each length composition bootstrap iteration
-  usesa different ALK bootstrap
+  uses a different ALK bootstrap
 - If `bootstraps = 0` in `create_alk()`, the same ALK is applied to all length
   composition bootstraps (only length composition uncertainty is captured)
 - Bootstrap ALKs are stored as attributes and automatically detected by
@@ -1623,10 +2176,10 @@ A data frame with the following required columns:
 - **`female`** (numeric): Number of female fish at this length in this sample
 - **`unsexed`** (numeric): Number of unsexed fish at this length in this sample
 - **`total`** (numeric, optional): Total fish at this length (auto-calculated
-  ifmissing)
+  if missing)
 - **`sample_weight_kg`** (numeric): Total weight of this sample in kg
 - **`total_catch_weight_kg`** (numeric): Total catch weight this sample
-  representsin kg
+  represents in kg
 
 #### Strata Data (`strata_data`)
 
@@ -1634,7 +2187,7 @@ A data frame with stratum-level information:
 
 - **`stratum`** (character/factor): Stratum identifier that matches fish_data
 - **`stratum_total_catch_kg`** (numeric): Total catch weight for entire stratum
-  inkg
+  in kg
 
 ### Density-Based Scaling (Research Surveys)
 
@@ -1649,10 +2202,10 @@ A data frame with the following required columns:
 - **`female`** (numeric): Number of female fish at this length in this sample
 - **`unsexed`** (numeric): Number of unsexed fish at this length in this sample
 - **`total`** (numeric, optional): Total fish at this length (auto-calculated
-  ifmissing)
+  if missing)
 - **`sample_area_km2`** (numeric): Area sampled in this sample in km^2
 - **`catch_density_kg_km2`** (numeric): Catch density observed in this sample
-  inkg/km^2
+  in kg/km^2
 
 #### Strata Data (`strata_data`)
 
@@ -1853,15 +2406,15 @@ The **binning** feature allows aggregation of fine-scale data into larger, more
 manageable bins:
 
 - **Flexible bin sizes**: Choose any bin size for both length (e.g., 2 cm, 5
-  cm)and age (e.g., 2 years, 3 years)
+  cm) and age (e.g., 2 years, 3 years)
 - **Automatic aggregation**: Compositions and confidence intervals are properly
-  summedacross bins
+  summed across bins
 - **Cleaner visualisation**: Reduces noise in data visualisation for broader
   pattern analysis
 - **Compatible with all options**: Works with both pooled and by-stratum plots,
   confidence intervals, and proportion scaling
 - **Consistent interface**: Same parameter structure for both length
-  (`length_bin_size`)and age (`age_bin_size`) binning
+  (`length_bin_size`) and age (`age_bin_size`) binning
 
 The plotting system generates **line plots with confidence interval ribbons**
 when bootstrap results are available, providing a clear and professional
@@ -1870,7 +2423,7 @@ visualisation of uncertainty in both length and age compositions.
 **Key Parameter Updates:**
 
 - **Consistent Interface**: Both `plot.length_composition()` and
-  `plot.age_composition()`use identical parameter names and functionality
+  `plot.age_composition()` use identical parameter names and functionality
 - **`by_stratum`**: Logical (TRUE/FALSE) for faceted by-stratum display
 - **`stratum`**: Character string to plot only a specific stratum (overrides
   `by_stratum`)
@@ -1881,7 +2434,7 @@ visualisation of uncertainty in both length and age compositions.
   aggregation
 - **`unsexed`**: Logical to include/exclude unsexed fish category
 - Removed deprecated parameters from age plotting: `strata`, `sex_categories`,
-  `include_pooled`,`age_bins`
+  `include_pooled`, `age_bins`
 
 ### Visualisation Features
 
@@ -2072,7 +2625,7 @@ plot_alk(alk, type = "heatmap", rug = TRUE)
   probabilities at each length, with darker colours indicating higher
   probabilities
 - **`type = "points"`**: Bubble plot where point size represents sample size
-  (n)or proportion
+  (n) or proportion
 
 #### Sex-Specific Visualisation
 
@@ -2089,7 +2642,7 @@ plot_alk(alk, by_sex = FALSE)
 - **`by_sex`**: Logical, whether to facet by sex category (default TRUE)
 - **`type`**: "heatmap" or "points" for different visualisation styles
 - **`rug`**: Logical, add a rug plot on the y-axis showing length distribution
-  (defaultFALSE)
+  (default FALSE)
 
 ## Uncertainty Analysis
 
@@ -2275,11 +2828,11 @@ plot_sample_size_distribution(
 The plot uses colour coding to show different sample categories:
 
 - **Non-representative Small** (red): Small samples with poor
-  representativeness(< 20% of total catch)
+  representativeness (< 20% of total catch)
 - **Representative Small** (amber): Small samples that are highly
-  representative(>= 20% of total catch)
+  representative (>= 20% of total catch)
 - **Adequate** (green): Samples meeting minimum fish count thresholds (>= 15
-  fishby default)
+  fish by default)
 
 When sample weight data is not available, all small samples are grouped as
 "Small Samples" since representativeness cannot be assessed.
@@ -2326,23 +2879,23 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 - **`fish_data`**: Data frame with fish sampling data including columns:
   stratum, sample_id, length, male, female, unsexed, plus either
   sample_weight_kg + total_catch_weight_kg (weight-based) or sample_area_km2 +
-  catch_density_kg_km2(density-based)
+  catch_density_kg_km2 (density-based)
 - **`strata_data`**: Data frame with columns: stratum, plus either
-  stratum_total_catch_kg(weight-based) or stratum_area_km2 (density-based)
+  stratum_total_catch_kg (weight-based) or stratum_area_km2 (density-based)
 - **`length_range`**: Numeric vector of min and max lengths to include (e.g.,
-  c(15,35))
+  `c(15, 35)`)
 - **`lw_params_male`**: Named vector with length-weight parameters for males:
-  c(a= 0.01, b = 3.0) (required)
+  `c(a = 0.01, b = 3.0)` (required)
 - **`lw_params_female`**: Named vector with length-weight parameters for
-  females:c(a = 0.01, b = 3.0) (required)
+  females: `c(a = 0.01, b = 3.0)` (required)
 - **`lw_params_unsexed`**: Named vector with length-weight parameters for
   unsexed fish: c(a = 0.01, b = 3.0) (required)
 - **`bootstraps`**: Integer, number of bootstrap iterations. Set to 0 for no
-  bootstrapping(default: 300)
+  bootstrapping (default: 300)
 - **`plus_group`**: Logical, combine lengths >= max length into a plus group
-  (default:FALSE)
+  (default: FALSE)
 - **`minus_group`**: Logical, combine lengths <= min length into a minus group
-  (default:FALSE)
+  (default: FALSE)
 - **`return_full_bootstraps`**: Logical, whether to return all individual
   bootstrap results along with summaries (default: FALSE)
 - **`verbose`**: Logical, whether to print progress messages (default: TRUE)
@@ -2355,9 +2908,9 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 - **`age_range`**: Numeric vector of min and max ages to include (e.g., c(1,
   10))
 - **`plus_group_age`**: Logical, combine ages >= max age into a plus group
-  (default:TRUE)
+  (default: TRUE)
 - **`minus_group_age`**: Logical, combine ages <= min age into a minus group
-  (default:FALSE)
+  (default: FALSE)
 - **`verbose`**: Logical, whether to print progress messages (default: TRUE)
 
 ### create_alk()
@@ -2373,7 +2926,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 - **`optimum_ages_per_length`**: Optimum number of ages per length bin
   (default:10)
 - **`length_bin_size`**: Numeric value for binning lengths (e.g., 2 for 2cm
-  bins).If NULL (default), uses raw length values
+  bins). If NULL (default), uses raw length values
 - **`interpolate`**: Logical, whether to allow linear interpolation for missing
   length bins (default: TRUE)
 - **`extrapolate`**: Logical, whether to allow extrapolation for lengths
@@ -2384,6 +2937,49 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
   sampling uncertainty
 - **`verbose`**: Logical, whether to print progress messages
 
+### fit_ordinal_alk()
+
+- **`alk_data`**: Data frame (or named list of sex-specific frames) with
+  columns: `age`, `length`, and optionally `sex` (one row per aged fish)
+- **`by_sex`**: Logical, whether to fit sex-specific smooths (default: TRUE)
+- **`k_length`**: Length-smooth basis dimension, with the same automatic rule
+  as `fit_cohort_alk()`; NULL uses `k`
+- **`k`**: Compatible alias for `k_length`, default -1; both must agree if
+  supplied together
+- **`k_year`**: Optional year-smooth basis dimension; NULL omits the built-in
+  year smooth, and non-positive values use the cohort function's automatic rule
+- **`plus_group`**: Optional positive integer defining an inclusive age plus
+  group; NULL applies no plus group
+- **`select`**: Whether to add an extra penalty allowing smooth terms to be
+  penalised to zero (default: TRUE)
+- **`gamma`**: Multiplier for effective degrees of freedom; values > 1 produce
+  smoother models (default: 1.4)
+- **`method`**: Smoothing parameter estimation method for mgcv (default:
+  "REML")
+- **`weights`**: Optional observation weights (default: NULL)
+- **`verbose`**: Logical, print model details (default: TRUE)
+
+**Note**: `additional_terms` can also be passed as a character vector of extra
+GAM formula terms (e.g., `"te(lat, long)"`). When `by_sex = TRUE`, smooth terms
+without a `by =` specification receive `by = sex`; parametric terms are used as
+supplied.
+
+Returns a list with:
+
+- `model`: fitted mgcv::gam object (ocat family)
+- `predict_function(lengths, sex)`: function returning a matrix of per-age
+  probabilities
+- `predict_age(lengths, sampling_years, sex, ...)`: probabilities over ages one
+  to the maximum observed age, or through the specified plus-group threshold,
+  with zeros for unobserved categories
+- `model_summary`: key model metrics
+- `ages`, `age_levels`, `sex_levels`, `by_sex`, `year_range`, `training_years`,
+  `age_support`, `plus_group`
+- `additional_terms`: the terms passed to the model
+
+The other fitters are documented with their workflows: see
+[Model-Based Age Composition Frameworks](#model-based-age-composition-frameworks).
+
 ### plot_alk()
 
 - **`alk`**: Age-length key data frame
@@ -2391,7 +2987,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 - **`type`**: Character, type of plot: "heatmap" (heatmap visualisation) or
   "points"(point plot) (default: "heatmap")
 - **`rug`**: Logical, whether to add a rug on the y-axis showing length
-  distribution(default: FALSE)
+  distribution (default: FALSE)
 
 ### generate_test_data()
 
@@ -2401,7 +2997,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 ### calculate_multinomial_n()
 
 - **`x`**: A length_composition object from calculate_length_compositions() or
-  anage_composition object from calculate_age_compositions()
+  an age_composition object from calculate_age_compositions()
 - **`stratum`**: Character, name of stratum to analyse. If NULL (default), uses
   pooled data across all strata
 - **`sex`**: Character, sex category to analyse: "male", "female", "unsexed",
@@ -2415,7 +3011,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 - **`remove_outliers`**: Numeric, proportion of outliers to remove (0-1,
   default:0.05)
 - **`min_proportion`**: Numeric, minimum proportion threshold to include in
-  analysis(default: 0.0001)
+  analysis (default: 0.0001)
 - **`max_cv`**: Numeric, maximum CV threshold to include in analysis (default:
   5.0)
 - **`trace`**: Logical, whether to show fitting details (default: FALSE)
@@ -2435,7 +3031,7 @@ This workflow helps ensure robust bootstrap uncertainty estimation by:
 ### Length-Weight Parameter Notes
 
 - Parameters follow the allometric relationship: **Weight (g) = a x
-  Length(cm)^b**
+  Length (cm)^b**
 - Both `a` and `b` must be positive values
 - Parameters must be provided as named vectors with elements 'a' and 'b'
 - Different parameters for each sex category allow for sexual dimorphism in
@@ -2731,31 +3327,30 @@ filtered_data_all <- filter_small_samples(
 cat("\nFull filtering impact (excludes all small samples):\n")
 print(filtered_data_all$filter_summary)
 
-  # Compare bootstrap results with and without small samples
-  cat("\nSensitivity analysis - comparing results:\n")
+# Compare bootstrap results with and without small samples
+cat("\nSensitivity analysis - comparing results:\n")
 
-  # Original data results
-  results_original <- calculate_length_compositions(
-    fish_data = fish_data,
-    strata_data = strata_data,
-    bootstraps = 100
-  )
+# Original data results
+results_original <- calculate_length_compositions(
+  fish_data = fish_data,
+  strata_data = strata_data,
+  bootstraps = 100
+)
 
-  # Filtered data results
-  results_filtered <- calculate_length_compositions(
-    fish_data = filtered_data$filtered_fish_data,
-    strata_data = strata_data,
-    bootstraps = 100
-  )
+# Filtered data results
+results_filtered <- calculate_length_compositions(
+  fish_data = filtered_data$filtered_fish_data,
+  strata_data = strata_data,
+  bootstraps = 100
+)
 
-  # Compare mean CVs
-  cv_original <- mean(results_original$pooled_lf_cv, na.rm = TRUE)
-  cv_filtered <- mean(results_filtered$pooled_lf_cv, na.rm = TRUE)
+# Compare mean CVs
+cv_original <- mean(results_original$pooled_lf_cv, na.rm = TRUE)
+cv_filtered <- mean(results_filtered$pooled_lf_cv, na.rm = TRUE)
 
-  cat("Mean CV - Original data:", round(cv_original, 3), "\n")
-  cat("Mean CV - Filtered data:", round(cv_filtered, 3), "\n")
-  cat("CV improvement:", round((cv_original - cv_filtered) / cv_original * 100, 1), "%\n")
-}
+cat("Mean CV - Original data:", round(cv_original, 3), "\n")
+cat("Mean CV - Filtered data:", round(cv_filtered, 3), "\n")
+cat("CV improvement:", round((cv_original - cv_filtered) / cv_original * 100, 1), "%\n")
 
 # Use stricter thresholds for critical analyses
 strict_eval <- evaluate_sample_sizes(
@@ -2783,9 +3378,9 @@ catch:
   retained despite low fish counts because they provide adequate coverage of the
   catch
 - **Poorly Representative** (<20% of total catch): Small samples that may be
-  excludedbecause they provide limited information relative to the total catch
+  excluded because they provide limited information relative to the total catch
 - **Smart Filtering**: The `filter_small_samples()` function can automatically
-  preserverepresentative samples while excluding problematic ones
+  preserve representative samples while excluding problematic ones
 
 **Key Insight**: A sample with only 10 fish might be perfectly adequate if it
 represents 50% of the total catch, while a sample with 12 fish representing only
@@ -2797,47 +3392,6 @@ represents 50% of the total catch, while a sample with 12 fish representing only
   resampling
 - **Minimum samples per stratum**: 8 samples (default) provides stable
   between-sample resampling
--
-
-### fit_ordinal_alk()
-
-- **`alk_data`**: Data frame (or named list of sex-specific frames) with
-  columns:`age`, `length`, and optionally `sex` (one row per aged fish)
-- **`by_sex`**: Logical, whether to fit sex-specific smooths (default: TRUE)
-- **`k_length`**: Length-smooth basis dimension, with the same automatic rule
-  as`fit_cohort_alk()`; NULL uses `k`
-- **`k`**: Compatible alias for `k_length`, default -1; both must agree if
-  suppliedtogether
-- **`k_year`**: Optional year-smooth basis dimension; NULL omits the built-in
-  year smooth, and non-positive values use the cohort function's automatic rule
-- **`plus_group`**: Optional positive integer defining an inclusive age plus
-  group;NULL applies no plus group
-- **`select`**: Whether to add an extra penalty allowing smooth terms to be
-  penalised to zero (default: TRUE)
-- **`gamma`**: Multiplier for effective degrees of freedom; values > 1 produce
-  smoother models (default: 1.4)
-- **`method`**: Smoothing parameter estimation method for mgcv (default:
-  "REML")
-- **`weights`**: Optional observation weights (default: NULL)
-- **`verbose`**: Logical, print model details (default: TRUE)
-
-**Note**: `additional_terms` can also be passed as a character vector of extra
-GAM formula terms (e.g., `"te(lat, long)"`). When `by_sex = TRUE`, smooth terms
-without a `by =` specification receive `by = sex`; parametric terms are used as
-supplied.
-
-Returns a list with:
-
-- `model`: fitted mgcv::gam object (ocat family)
-- `predict_function(lengths, sex)`: function returning a matrix of per-age
-  probabilities
-- `predict_age(lengths, sampling_years, sex, ...)`: probabilities over ages one
-  to the maximum observed age, or through the specified plus-group threshold,
-  withzeros for unobserved categories
-- `model_summary`: key model metrics
-- `ages`, `age_levels`, `sex_levels`, `by_sex`, `year_range`, `training_years`,
-  `age_support`,`plus_group`
-- `additional_terms`: the terms passed to the model
 - **Recommended fish per sample**: 20+ fish for critical stock assessment
   applications
 - **Recommended samples per stratum**: 10+ samples for robust uncertainty
@@ -2860,9 +3414,8 @@ Returns a list with:
 - Always perform sensitivity analysis comparing results with and without small
   samples
 - Prefer combining adjacent strata over excluding samples when possible
-- Consider combining adjacent strata if sample sizes are inadequate
 - Use fewer bootstrap iterations (50-100) for exploratory analysis with
-  marginalsample sizes
+  marginal sample sizes
 - Increase to 300+ bootstrap iterations only when sample sizes are adequate
 
 **Decision Framework for Small Sample Handling:**
@@ -2874,32 +3427,33 @@ Returns a list with:
 5. **Consider alternatives**: Stratum combination, weighted analysis, or
    conditional bootstrapping
 
-```
-
 ### Multinomial Effective Sample Size Analysis
 
 ```r
 # Calculate effective sample sizes for all combinations
-all_n <- calculate_all_multinomial_n(results) print(all_n)
+all_n <- calculate_multinomial_n(results, all = TRUE)
+print(all_n)
 
 # Calculate for specific stratum and sex
 eff_n_male <- calculate_multinomial_n(results, stratum = "North", sex = "male")
-cat("Effective sample size for North stratum males:", eff_n_male$effective_n,
-"\n")
+cat("Effective sample size for North stratum males:", eff_n_male$effective_n, "\n")
 
 # Calculate for pooled data (recommended for stock assessment)
-eff_n_total <- calculate_multinomial_n(results, sex = "total") cat("Pooled
-effective sample size:", eff_n_total$effective_n, "\n") cat("Based on",
-eff_n_total$n_bins, "length bins\n") cat("Model fit quality (residual SE):",
-round(eff_n_total$fit_summary$sigma, 4), "\n")
+eff_n_total <- calculate_multinomial_n(results, sex = "total")
+cat("Pooled effective sample size:", eff_n_total$effective_n, "\n")
+cat("Based on", eff_n_total$n_bins, "length bins\n")
+cat("Model fit quality (residual SE):", round(eff_n_total$fit_summary$sigma, 4), "\n")
 
 # Use stricter filtering for robust estimates
-robust_n <- calculate_all_multinomial_n(
+robust_n <- calculate_multinomial_n(
   results,
+  all = TRUE,
   min_proportion = 0.001,  # Exclude very small proportions
   max_cv = 3.0,           # Exclude high-CV length bins
   remove_outliers = 0.1   # Remove 10% of worst-fitting points
-) print("Robust effective sample sizes:") print(robust_n)
+)
+print("Robust effective sample sizes:")
+print(robust_n)
 ```
 
 ### Age Composition Analysis
@@ -2944,21 +3498,23 @@ plot(age_results, age_bin_size = 2, show_CIs = TRUE) # 2-year age bins
 plot(age_results, unsexed = TRUE, show_CIs = TRUE)
 
 # Calculate effective sample sizes for age compositions
-age_eff_n <- calculate_multinomial_n(age_results, sex = "total") cat("Age
-composition effective sample size:", age_eff_n$effective_n, "\n")
+age_eff_n <- calculate_multinomial_n(age_results, sex = "total")
+cat("Age composition effective sample size:", age_eff_n$effective_n, "\n")
 
 # Compare length vs age effective sample sizes
 length_eff_n <- calculate_multinomial_n(results, sex = "total")
-cat("\nComparison of effective sample sizes:\n") cat("Length compositions:",
-length_eff_n$effective_n, "based on", length_eff_n$n_bins, "length bins\n")
-cat("Age compositions:", age_eff_n$effective_n, "based on", age_eff_n$n_bins,
-"age bins\n")
+cat("\nComparison of effective sample sizes:\n")
+cat("Length compositions:", length_eff_n$effective_n, "based on", length_eff_n$n_bins, "length bins\n")
+cat("Age compositions:", age_eff_n$effective_n, "based on", age_eff_n$n_bins, "age bins\n")
 
 # Calculate effective sample sizes for all combinations (both length and age)
-all_length_n <- calculate_all_multinomial_n(results) all_age_n <-
-calculate_all_multinomial_n(age_results) cat("\nEffective sample sizes by
-stratum and sex:\n") print("Length compositions:") print(all_length_n)
-print("Age compositions:") print(all_age_n)
+all_length_n <- calculate_multinomial_n(results, all = TRUE)
+all_age_n <- calculate_multinomial_n(age_results, all = TRUE)
+cat("\nEffective sample sizes by stratum and sex:\n")
+print("Length compositions:")
+print(all_length_n)
+print("Age compositions:")
+print(all_age_n)
 ```
 
 #### Handling Incomplete Age-Length Keys with create_alk()
@@ -2973,9 +3529,10 @@ limited_age_key <- generate_age_length_key(
 )
 
 # Length compositions might span 20-40 cm, creating gaps
-print("Length composition range vs age-length key coverage:") cat("Length
-compositions: 20-40 cm\n") cat("Age-length key: 30-35 cm\n") cat("Gaps: 20-29 cm
-and 36-40 cm need interpolation\n")
+print("Length composition range vs age-length key coverage:")
+cat("Length compositions: 20-40 cm\n")
+cat("Age-length key: 30-35 cm\n")
+cat("Gaps: 20-29 cm and 36-40 cm need interpolation\n")
 
 # Step 1: Create complete age-length key from raw age data with interpolation
 complete_age_key <- create_alk(
@@ -3021,16 +3578,17 @@ age_results_tails <- calculate_age_compositions(
 )
 
 # For comparison: Using incomplete key directly (will show warnings)
-cat("\nTrying incomplete key (will show warnings):\n") age_results_incomplete <-
-calculate_age_compositions(
+cat("\nTrying incomplete key (will show warnings):\n")
+age_results_incomplete <- calculate_age_compositions(
   x = results,
   age_length_key = limited_age_key,  # Incomplete key
   age_range = c(1, 8)
 )
 
-cat("\nComparison of approaches:\n") cat("Complete key (create_alk): 100% of
-fish allocated to ages\n") cat("Incomplete key: Only fish with exact length
-matches allocated\n") cat("Missing lengths generate explicit warnings\n")
+cat("\nComparison of approaches:\n")
+cat("Complete key (create_alk): 100% of fish allocated to ages\n")
+cat("Incomplete key: Only fish with exact length matches allocated\n")
+cat("Missing lengths generate explicit warnings\n")
 ```
 
 ## Notes for Real Applications
