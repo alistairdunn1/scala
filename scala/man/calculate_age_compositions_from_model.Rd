@@ -45,7 +45,7 @@ Use \code{\link{assign_ages_from_weight}} to add the age column first.}
 
 \item{minus_group_age}{Logical, combine ages <= min age into a minus group (default FALSE)}
 
-\item{model}{Optional fitted cohort, ordinal, multinomial or otolith-weight model,
+\item{model}{Optional fitted cohort, ordinal, multinomial, continuation-ratio or otolith-weight model,
 or traditional age-length key accepted by \code{\link{assign_ages}}}
 
 \item{verbose}{Logical, whether to print progress messages (default TRUE)}

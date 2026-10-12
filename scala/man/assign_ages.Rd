@@ -21,7 +21,7 @@ assign_ages(
 required by the model; other columns and row order are retained}
 
 \item{model}{Fitted object from \code{fit_cohort_alk}, \code{fit_ordinal_alk},
-\code{fit_multinomial_alk} or \code{fit_weight_age}, or an age-length key from
+\code{fit_multinomial_alk}, \code{fit_continuation_alk} or \code{fit_weight_age}, or an age-length key from
 \code{create_alk}; a data frame with length, age and proportion columns or a
 named list of sex-specific key data frames is also accepted}
 
@@ -51,7 +51,7 @@ Data frame with original columns, an assigned age column replacing any
 }
 \description{
 Assigns one age to each fish from the probabilities supplied by a
-  cohort, ordinal, multinomial or otolith-weight model, or a traditional
+  cohort, ordinal, multinomial, continuation-ratio or otolith-weight model, or a traditional
   age-length key. The same assignment rules are used for each probability source.
 }
 \details{

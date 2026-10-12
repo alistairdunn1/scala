@@ -3,7 +3,7 @@
 #' @description Calculates scaled age compositions from assigned ages and optionally
 #'   repeats age assignment during hierarchical bootstrap resampling.
 #' @inheritParams calculate_age_compositions_from_weight
-#' @param model Optional fitted cohort, ordinal, multinomial or otolith-weight model,
+#' @param model Optional fitted cohort, ordinal, multinomial, continuation-ratio or otolith-weight model,
 #'   or traditional age-length key accepted by \code{\link{assign_ages}}
 #' @param length_bin_size Optional traditional-key bin width passed to
 #'   \code{\link{assign_ages}} during bootstrap assignment
@@ -86,7 +86,7 @@ calculate_age_compositions_from_model <- function(fish_data,
   }
 
   if (!is.null(model)) {
-    if (!inherits(model, c("cohort_alk", "ordinal_alk", "multinomial_alk", "weight_age_model", "age_length_key")) && !is.data.frame(model) && !is.list(model)) {
+    if (!inherits(model, c("cohort_alk", "ordinal_alk", "multinomial_alk", "continuation_alk", "weight_age_model", "age_length_key")) && !is.data.frame(model) && !is.list(model)) {
       stop("model must be a supported fitted model or age-length key")
     }
   }

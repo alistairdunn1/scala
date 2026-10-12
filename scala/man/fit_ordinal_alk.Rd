@@ -114,6 +114,27 @@ Aged samples selected by length support conditional age probabilities when
 sampling within modelled covariate strata is independent of age. Catch age
 compositions require representative length data and appropriate catch expansion.
 }
+\section{Suitability warning}{
+
+The shared-threshold ordinal age model is unlikely to be useful for recovering
+changing cohort-strength patterns in catch-at-age compositions. It models age
+through common cumulative-logit thresholds; covariates shift a common latent
+predictor rather than providing independent age-specific responses. A strong or
+weak cohort moves through successive ages over time, which this structure can
+attenuate even when the broad age-length or cohort-trajectory shape appears
+reasonable. Increasing basis dimensions or relaxing smoothing does not remove
+the shared-threshold restriction.
+
+In a conditional Antarctic Toothfish simulation with cohort-model-generated
+truth, the fitted ordinal age specification substantially attenuated imposed
+strong and weak cohort contrasts. This is evidence against that specification
+for cohort-strength recovery, not a demonstration that all ordinal models fail.
+Convergence and a plausible mean age-length curve do not establish suitability
+for catch-at-age estimation. Evaluate multinomial age models, continuation-ratio
+models with age-specific temporal effects, or cohort formulations against the
+intended changes in age composition before selecting a model.
+}
+
 \examples{
 \dontrun{
 direct <- fit_ordinal_alk(aged_fish, k_length = 10, k_year = 10,

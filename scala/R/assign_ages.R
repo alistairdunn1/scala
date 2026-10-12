@@ -1,12 +1,12 @@
 #' Assign ages using a fitted model or an age-length key
 #'
 #' @description Assigns one age to each fish from the probabilities supplied by a
-#'   cohort, ordinal, multinomial or otolith-weight model, or a traditional
+#'   cohort, ordinal, multinomial, continuation-ratio or otolith-weight model, or a traditional
 #'   age-length key. The same assignment rules are used for each probability source.
 #' @param fish_data Data frame with one row per fish and the prediction covariates
 #'   required by the model; other columns and row order are retained
 #' @param model Fitted object from \code{fit_cohort_alk}, \code{fit_ordinal_alk},
-#'   \code{fit_multinomial_alk} or \code{fit_weight_age}, or an age-length key from
+#'   \code{fit_multinomial_alk}, \code{fit_continuation_alk} or \code{fit_weight_age}, or an age-length key from
 #'   \code{create_alk}; a data frame with length, age and proportion columns or a
 #'   named list of sex-specific key data frames is also accepted
 #' @param method Assignment rule: \code{"random"} samples an age from its
@@ -89,7 +89,7 @@ assign_ages <- function(fish_data, model, method = c("random", "mode", "expected
       seed < 0 || seed > .Machine$integer.max || seed != floor(seed))) {
     stop("seed must be NULL or one non-negative integer.")
   }
-  fitted <- inherits(model, c("cohort_alk", "ordinal_alk", "multinomial_alk", "weight_age_model"))
+  fitted <- inherits(model, c("cohort_alk", "ordinal_alk", "multinomial_alk", "continuation_alk", "weight_age_model"))
   if (!fitted && !is.data.frame(model) && !is.list(model)) stop("Unsupported age model or age-length key.")
   if (!is.null(length_bin_size) && (fitted || !is.numeric(length_bin_size) ||
       length(length_bin_size) != 1L || !is.finite(length_bin_size) || length_bin_size <= 0)) {
@@ -130,6 +130,7 @@ assign_ages <- function(fish_data, model, method = c("random", "mode", "expected
     }
     if (length(model$additional_terms)) variables <- union(variables,
       unique(unlist(lapply(model$additional_terms, function(term) all.vars(str2lang(term))))))
+    if (!is.null(model$prediction_variables)) variables <- model$prediction_variables
     year_used <- !is_weight && (inherits(model, "cohort_alk") || "year" %in% variables ||
       length(model$training_years) > 0)
     if (year_used) {

@@ -31,6 +31,19 @@
 #'   model_summary, deviance_explained (percentage), ages, age_levels, sex_levels,
 #'   by_sex, additional_terms, k_length, k_year, year_range, training_years,
 #'   age_support, response_type and plus_group
+#' @section Suitability warning:
+#' The shared-threshold ordinal age model is unlikely to be useful for recovering
+#' changing cohort-strength patterns in catch-at-age compositions. It models age
+#' through common cumulative-logit thresholds; covariates shift a common latent
+#' predictor rather than providing independent age-specific responses. A strong or
+#' weak cohort moves through successive ages over time, which this structure can
+#' attenuate even when the broad age-length or cohort-trajectory shape appears
+#' reasonable. Increasing basis dimensions or relaxing smoothing does not remove
+#' the shared-threshold restriction.
+#'
+#' In a simulation with cohort-model-generated truth, the fitted ordinal age
+#' specification substantially attenuated imposed strong and weak cohort contrasts.
+#' This is evidence against this specification for cohort-strength recovery
 #' @details
 #' The model estimates ordered age categories directly. Its response is age,
 #' whereas fit_cohort_alk estimates cohort and converts cohort to age using the
@@ -79,10 +92,13 @@
 #' compositions require representative length data and appropriate catch expansion.
 #' @examples
 #' \dontrun{
-#' direct <- fit_ordinal_alk(aged_fish, k_length = 10, k_year = 10,
-#'   additional_terms = "te(long, lat, k = c(6, 6))")
+#' direct <- fit_ordinal_alk(aged_fish,
+#'   k_length = 10, k_year = 10,
+#'   additional_terms = "te(long, lat, k = c(6, 6))"
+#' )
 #' probabilities <- direct$predict_age(c(100, 120), 2025, "female",
-#'   long = c(180, 181), lat = c(-70, -71))
+#'   long = c(180, 181), lat = c(-70, -71)
+#' )
 #' }
 #' @seealso \code{\link{fit_cohort_alk}}, \code{\link{fit_multinomial_alk}}, \code{\link[mgcv]{gam}}
 #' @importFrom mgcv gam s
@@ -92,11 +108,13 @@ fit_ordinal_alk <- function(alk_data, by_sex = TRUE, k = -1, additional_terms = 
                             select = TRUE, gamma = 1.4, method = "REML",
                             weights = NULL, verbose = TRUE,
                             k_length = NULL, k_year = NULL, plus_group = NULL) {
-  fit_age_alk_model(alk_data = alk_data, by_sex = by_sex, k = k,
+  fit_age_alk_model(
+    alk_data = alk_data, by_sex = by_sex, k = k,
     additional_terms = additional_terms, select = select, gamma = gamma,
     method = method, weights = weights, verbose = verbose,
     k_length = k_length, k_year = k_year, model_type = "ordinal",
-    k_supplied = !missing(k), plus_group = plus_group)
+    k_supplied = !missing(k), plus_group = plus_group
+  )
 }
 #' Print an ordinal age-at-length model
 #' @param x An ordinal_alk object
